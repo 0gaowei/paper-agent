@@ -973,9 +973,32 @@ class Settings(BaseSettings):
                 )
             )
         ):
+            litellm_model = self.get_agent_llm()
+            model_name = self.agent.agent_llm
+
+            # aviary's ToolSelector binds ``model_name`` as the first positional
+            # argument via ``functools.partial`` and then invokes with
+            # ``messages=<list>`` as a keyword argument.  Avoid binding ``messages``
+            # in the signature and pull it from kwargs/positional instead.
+            async def agent_acompletion(*args, messages=None, **kwargs):
+                if messages is None and args:
+                    messages = args[-1]
+                spec = next(
+                    (
+                        s
+                        for s in litellm_model.llm_config.models
+                        if s.name == model_name
+                    ),
+                    None,
+                )
+                if spec is None:
+                    spec = litellm_model.llm_config.models[0]
+                call_kwargs = spec.to_litellm_kwargs() | kwargs
+                return await litellm.acompletion(messages=messages, **call_kwargs)
+
             return ToolSelector(
-                model_name=self.agent.agent_llm,
-                acompletion=self.get_agent_llm().get_router().acompletion,
+                model_name=model_name,
+                acompletion=agent_acompletion,
                 **(self.agent.agent_config or {}),
             )
         return None
