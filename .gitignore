@@ -316,3 +316,6 @@ src/paperqa/clients/client_data/retractions.csv
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Cursor
+.cursor/
