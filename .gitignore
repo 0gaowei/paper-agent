@@ -312,3 +312,7 @@ tests/example2.*
 
 # Client data
 src/paperqa/clients/client_data/retractions.csv
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
