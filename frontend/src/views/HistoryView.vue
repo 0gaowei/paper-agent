@@ -77,7 +77,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh, Calendar, Search, Document, Timer, Coin, Delete } from '@element-plus/icons-vue'
-import { getSearchHistory } from '@/api'
+import { deleteHistoryRecord, getSearchHistory } from '@/api'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { HistoryRecord } from '@/types'
 
@@ -125,7 +125,8 @@ const rerunSearch = async (record: HistoryRecord) => {
   router.push({ path: '/', query: { q: record.query } })
 }
 
-const deleteRecord = (id: string) => {
+const deleteRecord = async (id: string) => {
+  await deleteHistoryRecord(id)
   history.value = history.value.filter(r => r.id !== id)
 }
 

@@ -87,9 +87,10 @@
           
           <div class="section-card">
             <h2 class="section-title">相关论文推荐</h2>
-            <div class="related-papers">
+            <div v-if="relatedPapers.length" class="related-papers">
               <PaperCard v-for="relatedPaper in relatedPapers" :key="relatedPaper.id" :paper="relatedPaper" />
             </div>
+            <el-empty v-else description="暂无相关论文" :image-size="80" />
           </div>
         </div>
         
@@ -136,11 +137,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Connection, Download, Unlock, Lock, ChatLineSquare, TopRight, Link, Document } from '@element-plus/icons-vue'
 import { usePapersStore } from '@/stores/papers'
-import { mockPapers } from '@/api'
+import { getRelatedPapers } from '@/api'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import PaperCard from '@/components/paper/PaperCard.vue'
 import type { Paper } from '@/types'
@@ -151,13 +152,7 @@ const papersStore = usePapersStore()
 
 const loading = ref(true)
 const paper = ref<Paper | null>(null)
-
-const relatedPapers = computed(() => {
-  if (!paper.value) return []
-  return mockPapers
-    .filter(p => p.id !== paper.value?.id)
-    .slice(0, 4)
-})
+const relatedPapers = ref<Paper[]>([])
 
 const goBack = () => {
   router.back()
@@ -179,6 +174,11 @@ onMounted(async () => {
   const paperId = route.params.paperId as string
   if (paperId) {
     paper.value = await papersStore.fetchPaper(paperId)
+    if (paper.value) {
+      relatedPapers.value = (await getRelatedPapers(paperId))
+        .filter(p => p.id !== paper.value?.id)
+        .slice(0, 4)
+    }
   }
   loading.value = false
 })

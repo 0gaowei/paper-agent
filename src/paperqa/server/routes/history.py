@@ -1,0 +1,66 @@
+"""History routes for session listing and deletion."""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, HTTPException, status
+
+from paperqa.server.schemas import HistoryEntry
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/history", tags=["history"])
+
+
+@router.get(
+    "",
+    response_model=list[HistoryEntry],
+    summary="List recent sessions",
+)
+async def list_history(
+    limit: int = 100,
+) -> list[HistoryEntry]:
+    """Return the most recent research sessions, up to `limit`.
+
+    Only sessions with a terminal status (done / cancelled / error) are returned.
+    """
+    from paperqa.server.app import app
+
+    repository = app.state.repository
+    sessions = await repository.list_(limit=limit)
+
+    entries: list[HistoryEntry] = []
+    for session in sessions:
+        if session.status not in ("done", "cancelled", "error"):
+            continue
+        entries.append(
+            HistoryEntry(
+                id=session.id,
+                query=session.query,
+                status=session.status,
+                created_at=session.created_at,
+                updated_at=session.updated_at,
+                papers_count=len(session.papers),
+                rounds=session.rounds,
+                answer_length=len(session.answer) if session.answer else 0,
+            )
+        )
+    return entries
+
+
+@router.delete(
+    "/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a session",
+)
+async def delete_history(session_id: str) -> None:
+    """Permanently delete a research session and its file."""
+    from paperqa.server.app import app
+
+    repository = app.state.repository
+    deleted = await repository.delete(session_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id!r} not found.",
+        )

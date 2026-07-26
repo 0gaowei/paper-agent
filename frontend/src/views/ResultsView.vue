@@ -86,26 +86,28 @@
           <StatCard
             :icon="Document"
             label="论文总数"
-            :value="searchStore.session.stats.totalPapers"
+            :value="searchStore.session.stats.totalPapers ?? 0"
           />
           <StatCard
             :icon="Select"
             label="相关论文"
-            :value="searchStore.session.stats.relevantPapers"
+            :value="searchStore.session.stats.relevantPapers ?? 0"
           />
           <StatCard
             :icon="Connection"
             label="API 调用"
-            :value="searchStore.session.stats.apiCalls"
+            :value="searchStore.session.stats.apiCalls ?? 0"
           />
           <StatCard
             :icon="Coin"
             label="成本"
-            :value="searchStore.session.stats.cost"
+            :value="searchStore.session.stats.cost ?? 0"
             format="currency"
           />
         </div>
         
+        <el-alert v-if="searchStore.session?.answerSummary" :title="searchStore.session.answerSummary" type="info" :closable="false" />
+        <div v-if="searchStore.session?.evidenceSnippets?.length" class="evidence-list"><h3>证据片段</h3><p v-for="(snippet, index) in searchStore.session.evidenceSnippets" :key="index">{{ snippet.text }}</p></div>
         <PaperList :papers="papersStore.filteredPapers" />
       </main>
     </div>
@@ -117,6 +119,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Connection, Grid, List, RefreshLeft, Document, Select, Coin } from '@element-plus/icons-vue'
 import { useSearchStore } from '@/stores/search'
+import { getSession } from '@/api'
 import { usePapersStore } from '@/stores/papers'
 import StatCard from '@/components/common/StatCard.vue'
 import PaperList from '@/components/paper/PaperList.vue'
@@ -162,10 +165,12 @@ const viewGraph = () => {
 
 onMounted(async () => {
   if (!searchStore.session) {
-    const sessionId = route.params.sessionId as string
-    if (sessionId) {
-      await searchStore.startSearch(searchStore.query || 'transformer')
-    }
+      const sessionId = route.params.sessionId as string
+      if (sessionId) {
+        const restored = await getSession(sessionId)
+        searchStore.session = restored
+        searchStore.query = restored.query
+      }
   }
   if (searchStore.session) {
     papersStore.setPapers(searchStore.session.papers)

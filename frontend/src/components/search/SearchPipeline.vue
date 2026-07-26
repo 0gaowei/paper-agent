@@ -40,7 +40,7 @@
         
         <transition name="fade">
           <div v-if="step.result && step.status === 'completed'" class="step-result">
-            <component :is="getResultComponent(step.id)" :data="step.result" />
+            <component :is="getResultComponent(step.id)" :data="step.result" :understanding="step.result" />
           </div>
         </transition>
       </div>
@@ -52,6 +52,11 @@
 import { computed } from 'vue'
 import { Minus, Check, Close, Loading } from '@element-plus/icons-vue'
 import type { PipelineStep } from '@/types'
+import QueryUnderstanding from './QueryUnderstanding.vue'
+import SubQueryList from './SubQueryList.vue'
+import PaperCountList from './PaperCountList.vue'
+import RankingFactorsView from './RankingFactorsView.vue'
+import type { Component } from 'vue'
 
 const props = defineProps<{
   steps: PipelineStep[]
@@ -84,8 +89,14 @@ const statusLabel = (status: PipelineStep['status']) => {
   return labels[status] || status
 }
 
-const getResultComponent = (_stepId: string) => {
-  return null
+const getResultComponent = (stepId: string): Component => {
+  const components: Record<string, Component> = {
+    '1': QueryUnderstanding,
+    '2': SubQueryList,
+    '3': PaperCountList,
+    '4': RankingFactorsView
+  }
+  return components[stepId] || PaperCountList
 }
 </script>
 

@@ -1,0 +1,639 @@
+"""Tests for the PaperQA server HTTP API.
+
+These tests use FastAPI's TestClient with lifespan support to exercise
+the server endpoints in an in-process, async-compatible context.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+import tempfile
+from collections.abc import AsyncGenerator
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+
+# Ensure the package is on the path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from paperqa.server.app import app
+from paperqa.server.repository import JSONFileRepository
+
+
+# ---------------------------------------------------------------------------
+# Test fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def temp_sessions_dir(tmp_path: Path) -> Path:
+    """Use pytest's tmp_path as the sessions directory."""
+    return tmp_path
+
+
+@pytest.fixture
+async def repository(temp_sessions_dir: Path) -> AsyncGenerator[JSONFileRepository, None]:
+    """Provide a clean repository backed by a temp directory."""
+    repo = JSONFileRepository(sessions_dir=temp_sessions_dir)
+    yield repo
+    # Cleanup: list and delete all session files
+    import anyio
+
+    sessions_dir = anyio.Path(temp_sessions_dir)
+    if await sessions_dir.exists():
+        async for path in sessions_dir.iterdir():
+            if path.suffix == ".json":
+                await path.unlink()
+
+
+@pytest.fixture
+def client() -> TestClient:
+    """Provide a synchronous TestClient that triggers the lifespan."""
+    # Patch the sessions dir to use a temp directory for isolation
+    import anyio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = anyio.Path(tmp)
+        # Replace the repository in app.state after startup
+        with TestClient(app) as tc:
+            from paperqa.server.repository import JSONFileRepository
+
+            tc.app.state.repository = JSONFileRepository(sessions_dir=tmp_path)
+            yield tc
+
+
+@pytest.fixture
+def client_with_repo(client: TestClient, temp_sessions_dir: Path) -> TestClient:
+    """Client with an isolated repository pointing to a temp directory."""
+    from paperqa.server.repository import JSONFileRepository
+
+    import anyio
+
+    client.app.state.repository = JSONFileRepository(sessions_dir=temp_sessions_dir)
+    return client
+
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+
+class TestHealth:
+    def test_health_returns_ok(self, client: TestClient) -> None:
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Settings endpoint — key hiding
+# ---------------------------------------------------------------------------
+
+
+class TestSettings:
+    def test_get_settings_returns_no_keys(self, client: TestClient) -> None:
+        """Settings must never expose API keys."""
+        response = client.get("/api/settings")
+        assert response.status_code == 200
+        data = response.json()
+        # Must have configured flags
+        assert "llm_configured" in data
+        assert "s2_configured" in data
+        assert "openalex_configured" in data
+        # Must not contain any key strings
+        for key in data:
+            assert "key" not in key.lower() or "configured" in key.lower(), (
+                f"Unexpected key in settings response: {key}"
+            )
+        # Values must be booleans or strings/numbers
+        assert isinstance(data.get("llm_configured"), bool)
+        assert isinstance(data.get("s2_configured"), bool)
+        assert isinstance(data.get("openalex_configured"), bool)
+
+    def test_update_settings_accepts_valid_fields(self, client: TestClient) -> None:
+        """PUT /api/settings should accept valid non-key fields."""
+        payload = {
+            "researcher_llm": "gpt-4o-mini",
+            "max_rounds": 5,
+            "high_relevance_threshold": 0.80,
+        }
+        response = client.put("/api/settings", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["researcher_llm"] == "gpt-4o-mini"
+        assert data["max_rounds"] == 5
+        assert data["high_relevance_threshold"] == 0.80
+
+    def test_update_settings_rejects_api_keys(self, client: TestClient) -> None:
+        """Keys passed in the body must not be stored."""
+        payload = {
+            "researcher_llm": "gpt-4o",
+            "llm_api_key": "sk-secret-123",  # Should be ignored
+            "s2_api_key": "fake-key",  # Should be ignored
+        }
+        response = client.put("/api/settings", json=payload)
+        assert response.status_code == 200
+        # Keys must not appear in response
+        data = response.json()
+        for key in data:
+            assert "key" not in key.lower() or "configured" in key.lower()
+
+
+# ---------------------------------------------------------------------------
+# Session creation — 202 Accepted, immediate return
+# ---------------------------------------------------------------------------
+
+
+class TestSessionCreate:
+    def test_create_session_returns_202(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "What is attention mechanism?"},
+        )
+        assert response.status_code == 202
+        data = response.json()
+        assert "id" in data
+        assert isinstance(data["id"], str)
+
+    def test_create_session_query_required(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.post("/api/sessions", json={"query": ""})
+        assert response.status_code == 422  # Validation error
+
+    def test_create_session_missing_query(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.post("/api/sessions", json={})
+        assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Session retrieval
+# ---------------------------------------------------------------------------
+
+
+class TestSessionGet:
+    def test_get_session_not_found(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.get("/api/sessions/nonexistent-id")
+        assert response.status_code == 404
+
+    def test_get_session_after_create(self, client_with_repo: TestClient) -> None:
+        # Create
+        create_resp = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "machine learning benchmarks"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Retrieve
+        get_resp = client_with_repo.get(f"/api/sessions/{session_id}")
+        assert get_resp.status_code == 200
+        data = get_resp.json()
+        assert data["session"]["id"] == session_id
+        assert data["session"]["query"] == "machine learning benchmarks"
+        assert data["session"]["status"] == "pending"
+        assert "papers" in data
+        assert isinstance(data["papers"], list)
+
+
+# ---------------------------------------------------------------------------
+# SSE events stream
+# ---------------------------------------------------------------------------
+
+
+class TestSSEEvents:
+    def test_sse_events_returns_200(
+        self, client_with_repo: TestClient
+    ) -> None:
+        # Create session first
+        create_resp = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "transformer architecture"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Subscribe to SSE
+        import threading
+
+        response_holder: dict[str, Any] = {}
+
+        def fetch_sse() -> None:
+            with client_with_repo.stream(
+                "GET", f"/api/sessions/{session_id}/events",
+                timeout=5,
+            ) as response:
+                events: list[dict] = []
+                for line in response.iter_lines():
+                    if line.startswith("data: "):
+                        events.append(json.loads(line[6:]))
+                response_holder["events"] = events
+                response_holder["status"] = response.status_code
+
+        t = threading.Thread(target=fetch_sse)
+        t.start()
+        t.join(timeout=6)
+
+        assert response_holder.get("status") == 200
+        events = response_holder.get("events", [])
+        assert len(events) > 0
+
+    def test_sse_unknown_session_returns_no_events(
+        self, client_with_repo: TestClient
+    ) -> None:
+        """Unknown session should stream (and then close when session is not found)."""
+        import time
+
+        # Without a session being created, the SSE will simply never emit events
+        # The client will timeout — this is acceptable behavior
+        with client_with_repo.stream(
+            "GET",
+            "/api/sessions/unknown-session/events",
+            timeout=1,
+        ) as response:
+            # The stream opens but will timeout because no session exists
+            assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# SSE event ordering
+# ---------------------------------------------------------------------------
+
+
+class TestSSEOrdering:
+    def test_sse_events_arrive_in_order(self, client_with_repo: TestClient) -> None:
+        import threading
+        import time
+
+        create_resp = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "neural architecture search"},
+        )
+        session_id = create_resp.json()["id"]
+
+        received_events: list[str] = []
+        received_lines: list[str] = []
+        status_code_holder: list[int] = []
+
+        def fetch_sse() -> None:
+            with client_with_repo.stream(
+                "GET", f"/api/sessions/{session_id}/events",
+                timeout=10,
+            ) as response:
+                status_code_holder.append(response.status_code)
+                for line in response.iter_lines():
+                    received_lines.append(line)
+                    if line.startswith("event: "):
+                        received_events.append(line[7:].strip())
+
+        t = threading.Thread(target=fetch_sse)
+        t.start()
+        t.join(timeout=8)
+
+        assert status_code_holder == [200]
+        # Should have at least the expected phases
+        expected_order = [
+            "understanding",
+            "subqueries",
+            "round_started",
+            "paper_found",
+            "partial_documents",
+            "answer",
+            "usage",
+            "done",
+        ]
+        for expected in expected_order:
+            assert expected in received_events, (
+                f"Event '{expected}' not found in {received_events}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Cancellation
+# ---------------------------------------------------------------------------
+
+
+class TestCancellation:
+    def test_cancel_unknown_session_returns_404(
+        self, client_with_repo: TestClient
+    ) -> None:
+        response = client_with_repo.post("/api/sessions/unknown/cancel")
+        assert response.status_code == 404
+
+    def test_cancel_session_returns_200(self, client_with_repo: TestClient) -> None:
+        # Create a session
+        create_resp = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "test query for cancellation"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Cancel
+        cancel_resp = client_with_repo.post(f"/api/sessions/{session_id}/cancel")
+        assert cancel_resp.status_code == 200
+        data = cancel_resp.json()
+        assert data["status"] == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# History listing
+# ---------------------------------------------------------------------------
+
+
+class TestHistory:
+    def test_history_empty_returns_empty_list(
+        self, client_with_repo: TestClient
+    ) -> None:
+        response = client_with_repo.get("/api/history")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_history_lists_completed_sessions(
+        self, client_with_repo: TestClient
+    ) -> None:
+        import anyio
+
+        repo: JSONFileRepository = client_with_repo.app.state.repository
+
+        # Manually insert a session file
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        session = ResearchSession(
+            id="test-history-1",
+            query="history test query",
+            status="done",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+            rounds=2,
+            answer="Short answer.",
+        )
+        # Persist directly via repository
+        anyio.run(repo.save, session)
+
+        response = client_with_repo.get("/api/history")
+        assert response.status_code == 200
+        entries = response.json()
+        assert len(entries) >= 1
+        assert any(e["id"] == "test-history-1" for e in entries)
+
+    def test_history_respects_limit(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.get("/api/history?limit=5")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+
+# ---------------------------------------------------------------------------
+# History deletion
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryDelete:
+    def test_delete_unknown_session_returns_404(
+        self, client_with_repo: TestClient
+    ) -> None:
+        response = client_with_repo.delete("/api/history/unknown-id")
+        assert response.status_code == 404
+
+    def test_delete_session_returns_204(self, client_with_repo: TestClient) -> None:
+        import anyio
+
+        repo: JSONFileRepository = client_with_repo.app.state.repository
+
+        # Insert a session
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        session = ResearchSession(
+            id="to-delete-1",
+            query="session to delete",
+            status="done",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        anyio.run(repo.save, session)
+
+        # Delete
+        del_resp = client_with_repo.delete("/api/history/to-delete-1")
+        assert del_resp.status_code == 204
+
+        # Confirm gone
+        get_resp = client_with_repo.get("/api/sessions/to-delete-1")
+        assert get_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Papers endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestPapers:
+    def test_paper_not_found(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.get("/api/papers/nonexistent")
+        assert response.status_code == 404
+
+    def test_paper_graph_not_found(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.get("/api/papers/nonexistent/graph")
+        assert response.status_code == 404
+
+    def test_paper_graph_returns_structure(self, client_with_repo: TestClient) -> None:
+        """Graph endpoint should return {nodes, edges} structure."""
+        import anyio
+
+        repo: JSONFileRepository = client_with_repo.app.state.repository
+
+        from paperqa.server.schemas import AcademicPaper, PaperSource, RelevanceTier
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        paper = AcademicPaper(
+            id="graph-test-paper",
+            title="Test Paper for Graph",
+            year=2024,
+            authors=["Test Author"],
+            relevance_tier=RelevanceTier.HIGH,
+            source=PaperSource.SEMANTIC_SCHOLAR,
+            referenced_works=["ref-1", "ref-2"],
+            citing_works=["citing-1"],
+        )
+        session = ResearchSession(
+            id="graph-test-session",
+            query="graph test",
+            status="done",
+            papers={"graph-test-paper": paper},
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        anyio.run(repo.save, session)
+
+        response = client_with_repo.get("/api/papers/graph-test-paper/graph")
+        assert response.status_code == 200
+        data = response.json()
+        assert "nodes" in data
+        assert "edges" in data
+
+
+# ---------------------------------------------------------------------------
+# Session graph
+# ---------------------------------------------------------------------------
+
+
+class TestSessionGraph:
+    def test_session_graph_returns_structure(self, client_with_repo: TestClient) -> None:
+        import anyio
+
+        repo: JSONFileRepository = client_with_repo.app.state.repository
+
+        from paperqa.server.schemas import ResearchSession, SubQuery
+        import datetime
+
+        session = ResearchSession(
+            id="graph-session-test",
+            query="attention in transformers",
+            status="done",
+            subqueries=[SubQuery(text="what is attention", round=0)],
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        anyio.run(repo.save, session)
+
+        response = client_with_repo.get("/api/sessions/graph-session-test/graph")
+        assert response.status_code == 200
+        data = response.json()
+        assert "nodes" in data
+        assert "edges" in data
+        assert "query" in data
+        assert data["query"] == "attention in transformers"
+
+
+# ---------------------------------------------------------------------------
+# Usage endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestUsage:
+    def test_usage_returns_stats(self, client_with_repo: TestClient) -> None:
+        response = client_with_repo.get("/api/usage")
+        assert response.status_code == 200
+        data = response.json()
+        assert "total_tokens" in data
+        assert "total_cost" in data
+        assert "llm_calls" in data
+        assert "search_calls" in data
+        # All should be integers or floats
+        assert isinstance(data["total_tokens"], int)
+        assert isinstance(data["total_cost"], float)
+
+
+# ---------------------------------------------------------------------------
+# Repository — atomic writes
+# ---------------------------------------------------------------------------
+
+
+class TestRepository:
+    @pytest.mark.anyio
+    async def test_save_and_load_roundtrip(
+        self, repository: JSONFileRepository
+    ) -> None:
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        session = ResearchSession(
+            id="roundtrip-test",
+            query="roundtrip test",
+            status="done",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        await repository.save(session)
+        loaded = await repository.get("roundtrip-test")
+        assert loaded is not None
+        assert loaded.id == "roundtrip-test"
+        assert loaded.query == "roundtrip test"
+
+    @pytest.mark.anyio
+    async def test_save_atomic_creates_json_file(
+        self, repository: JSONFileRepository
+    ) -> None:
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        session = ResearchSession(
+            id="atomic-write-test",
+            query="atomic write test",
+            status="running",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        await repository.save(session)
+        # A .json file (not .tmp) should exist
+        path = repository._session_path("atomic-write-test")
+        assert await path.exists()
+        assert path.suffix == ".json"
+
+    @pytest.mark.anyio
+    async def test_get_nonexistent_returns_none(
+        self, repository: JSONFileRepository
+    ) -> None:
+        result = await repository.get("does-not-exist")
+        assert result is None
+
+    @pytest.mark.anyio
+    async def test_delete_removes_file(self, repository: JSONFileRepository) -> None:
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        session = ResearchSession(
+            id="delete-test",
+            query="delete test",
+            status="done",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        await repository.save(session)
+        deleted = await repository.delete("delete-test")
+        assert deleted is True
+        assert await repository.get("delete-test") is None
+
+    @pytest.mark.anyio
+    async def test_list_returns_most_recent_first(
+        self, repository: JSONFileRepository
+    ) -> None:
+        import datetime
+
+        from paperqa.server.schemas import ResearchSession
+
+        sessions = [
+            ResearchSession(
+                id=f"list-test-{i}",
+                query=f"query {i}",
+                status="done",
+                created_at=datetime.datetime.utcnow(),
+                updated_at=datetime.datetime.utcnow(),
+            )
+            for i in range(5)
+        ]
+        for s in sessions:
+            await repository.save(s)
+
+        listed = await repository.list_(limit=10)
+        assert len(listed) == 5
+        # Most recently updated first
+        ids = [s.id for s in listed]
+        assert ids == sorted(ids, key=lambda x: x, reverse=True)  # most-recently-updated first
+
+    @pytest.mark.anyio
+    async def test_exists(self, repository: JSONFileRepository) -> None:
+        from paperqa.server.schemas import ResearchSession
+        import datetime
+
+        assert await repository.exists("new-session") is False
+        session = ResearchSession(
+            id="new-session",
+            query="exists test",
+            status="pending",
+            created_at=datetime.datetime.utcnow(),
+            updated_at=datetime.datetime.utcnow(),
+        )
+        await repository.save(session)
+        assert await repository.exists("new-session") is True

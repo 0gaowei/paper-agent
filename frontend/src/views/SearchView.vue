@@ -11,7 +11,7 @@
             :is-searching="searchStore.isSearching"
             @search="handleSearch"
             @clear="handleClear"
-          />
+          <el-button v-if="searchStore.isSearching" type="danger" plain @click="cancelSearch">取消搜索</el-button>
         </div>
       </div>
     </div>
@@ -66,33 +66,33 @@
             <StatCard
               :icon="Document"
               label="论文总数"
-              :value="searchStore.session.stats.totalPapers"
+              :value="searchStore.session.stats.totalPapers ?? 0"
             />
             <StatCard
               :icon="Select"
               label="相关论文"
-              :value="searchStore.session.stats.relevantPapers"
+              :value="searchStore.session.stats.relevantPapers ?? 0"
             />
             <StatCard
               :icon="Connection"
               label="API 调用"
-              :value="searchStore.session.stats.apiCalls"
+              :value="searchStore.session.stats.apiCalls ?? 0"
             />
             <StatCard
               :icon="Coin"
               label="Token 使用"
-              :value="searchStore.session.stats.tokenUsage"
+              :value="searchStore.session.stats.tokenUsage ?? 0"
             />
             <StatCard
               :icon="Money"
               label="成本"
-              :value="searchStore.session.stats.cost"
+              :value="searchStore.session.stats.cost ?? 0"
               format="currency"
             />
             <StatCard
               :icon="Timer"
               label="耗时"
-              :value="searchStore.session.stats.duration"
+              :value="searchStore.session.stats.duration ?? 0"
               format="duration"
             />
           </div>
@@ -115,10 +115,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Cpu, Share, DataLine, Connection, Document, Select, Coin, Money, Timer, ArrowRight } from '@element-plus/icons-vue'
 import { useSearchStore } from '@/stores/search'
-import { usePapersStore } from '@/stores/papers'
+import { SearchConfig } from '@/types'
 import SearchInput from '@/components/search/SearchInput.vue'
 import SearchPipeline from '@/components/search/SearchPipeline.vue'
 import QueryUnderstanding from '@/components/search/QueryUnderstanding.vue'
@@ -126,25 +126,17 @@ import StatCard from '@/components/common/StatCard.vue'
 import PaperList from '@/components/paper/PaperList.vue'
 
 const router = useRouter()
+const route = useRoute()
 const searchStore = useSearchStore()
-const papersStore = usePapersStore()
 
 const searchInputRef = ref<InstanceType<typeof SearchInput> | null>(null)
 
-interface SearchOptions {
-  enableQueryDecomposition: boolean
-  enableIterativeSearch: boolean
-  enableQueryRewrite: boolean
-  maxIterations: number
-  maxResults: number
+const handleSearch = (searchQuery: string, options: SearchConfig) => {
+  const operation = searchStore.startSearch(searchQuery, options)
+  operation.promise.catch(() => undefined)
 }
 
-const handleSearch = async (query: string, _options: SearchOptions) => {
-  await searchStore.startSearch(query)
-  if (searchStore.session) {
-    papersStore.setPapers(searchStore.session.papers)
-  }
-}
+const cancelSearch = () => searchStore.clearSearch()
 
 const handleClear = () => {
   searchStore.clearSearch()
@@ -158,6 +150,8 @@ const viewAllResults = () => {
 
 onMounted(() => {
   searchInputRef.value?.focus()
+  const initialQuery = route.query.q
+  if (typeof initialQuery === 'string' && initialQuery) searchInputRef.value?.setQuery?.(initialQuery)
 })
 </script>
 

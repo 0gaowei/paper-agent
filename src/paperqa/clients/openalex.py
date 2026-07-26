@@ -314,3 +314,98 @@ class OpenAlexProvider(DOIOrTitleBasedProvider):
             title_similarity_threshold=query.title_similarity_threshold,
             fields=query.fields,
         )
+
+
+def _restore_openalex_abstract(inverted_index: Any) -> str | None:
+    if not isinstance(inverted_index, dict) or not inverted_index:
+        return None
+    indexed_words: list[tuple[int, str]] = []
+    for word, positions in inverted_index.items():
+        if not isinstance(positions, list):
+            continue
+        indexed_words.extend((int(position), str(word)) for position in positions)
+    return " ".join(word for _, word in sorted(indexed_words)) or None
+
+
+def _prepare_openalex_work(message: dict[str, Any]) -> dict[str, Any]:
+    work = dict(message)
+    if work.get("doi"):
+        work["doi"] = str(work["doi"]).removeprefix("https://doi.org/")
+    work["abstract"] = _restore_openalex_abstract(work.get("abstract_inverted_index"))
+    return work
+
+
+async def _openalex_get(
+    url: str, session: httpx.AsyncClient, *, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    request_params = dict(params or {})
+    if mailto := get_openalex_mailto():
+        request_params.setdefault("mailto", mailto)
+    headers = {"api_key": key} if (key := get_openalex_api_key()) else {}
+    async for attempt in AsyncRetrying(
+        retry=retry_if_exception(
+            lambda exc: isinstance(exc, (httpx.ReadTimeout, httpx.ConnectTimeout))
+            or (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR
+            )
+        ),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        stop=stop_after_attempt(3),
+    ):
+        with attempt:
+            response = await session.get(
+                url,
+                params=request_params,
+                headers=headers,
+                timeout=OPENALEX_API_REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            return response.json()
+    raise RuntimeError("OpenAlex request retry loop exited unexpectedly")
+
+
+async def openalex_search(
+    query: str,
+    session: httpx.AsyncClient,
+    per_page: int,
+    cursor: str = "*",
+) -> list[DocDetails]:
+    """Search OpenAlex works and restore its inverted-index abstracts."""
+    data = await _openalex_get(
+        f"{OPENALEX_BASE_URL}/works",
+        session,
+        params={"search": query, "per-page": per_page, "cursor": cursor},
+    )
+    return [
+        parse_openalex_to_doc_details(_prepare_openalex_work(message))
+        for message in data.get("results", [])
+    ]
+
+
+async def openalex_referenced_works(
+    paper_id: str, session: httpx.AsyncClient
+) -> list[str]:
+    """Return works referenced by an OpenAlex paper."""
+    data = await _openalex_get(
+        f"{OPENALEX_BASE_URL}/works/{quote(paper_id, safe=':/')}", session
+    )
+    return [str(identifier) for identifier in data.get("referenced_works") or []]
+
+
+async def openalex_get_doc(
+    paper_id: str, session: httpx.AsyncClient
+) -> DocDetails | None:
+    """Fetch one OpenAlex work by OpenAlex ID or DOI."""
+    identifier = paper_id
+    if paper_id.lower().startswith("10."):
+        identifier = f"https://doi.org/{paper_id}"
+    try:
+        data = await _openalex_get(
+            f"{OPENALEX_BASE_URL}/works/{quote(identifier, safe=':/')}", session
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == httpx.codes.NOT_FOUND:
+            return None
+        raise
+    return parse_openalex_to_doc_details(_prepare_openalex_work(data))

@@ -156,7 +156,10 @@ def s2_authors_match(authors: list[str], data: dict) -> bool:
 
 
 async def parse_s2_to_doc_details(
-    paper_data: dict[str, Any], client: httpx.AsyncClient
+    paper_data: dict[str, Any],
+    client: httpx.AsyncClient,
+    *,
+    allow_missing_doi: bool = False,
 ) -> DocDetails:
 
     bibtex_source = BibTeXSource.SELF_GENERATED.value
@@ -164,25 +167,30 @@ async def parse_s2_to_doc_details(
     if "data" in paper_data:
         paper_data = paper_data["data"][0]
 
+    external_ids = paper_data.get("externalIds") or {}
     # ArXiV check goes 1st to override another DOI
-    if "ArXiv" in paper_data["externalIds"]:
-        doi = "10.48550/arXiv." + paper_data["externalIds"]["ArXiv"]
-    elif "DOI" in paper_data["externalIds"]:
-        doi = paper_data["externalIds"]["DOI"]
+    if "ArXiv" in external_ids:
+        doi = "10.48550/arXiv." + external_ids["ArXiv"]
+    elif "DOI" in external_ids:
+        doi = external_ids["DOI"]
+    elif allow_missing_doi:
+        doi = None
     else:
         raise DOINotFoundError(f"Could not find DOI for {paper_data}.")
 
     # Should we give preference to auto-generation?
-    if not (
-        bibtex := clean_upbibtex(paper_data.get("citationStyles", {}).get("bibtex", ""))
+    if bibtex := clean_upbibtex(
+        paper_data.get("citationStyles", {}).get("bibtex", "")
     ):
+        bibtex_source = BibTeXSource.SEMANTIC_SCHOLAR.value
+    elif doi:
         try:
             bibtex = await doi_to_bibtex(doi, client)
             bibtex_source = BibTeXSource.CROSSREF.value
         except DOINotFoundError:
             bibtex = None
     else:
-        bibtex_source = BibTeXSource.SEMANTIC_SCHOLAR.value
+        bibtex = None
 
     publication_date = None
     if paper_data.get("publicationDate"):
@@ -381,3 +389,73 @@ class SemanticScholarProvider(DOIOrTitleBasedProvider):
             title_similarity_threshold=query.title_similarity_threshold,
             fields=query.fields,
         )
+
+
+async def s2_topic_search(
+    query: str,
+    limit: int,
+    offset: int,
+    session: httpx.AsyncClient,
+) -> list[DocDetails]:
+    """Search Semantic Scholar for papers matching a topic query."""
+    endpoint, params = SemanticScholarSearchType.DEFAULT.make_url_params(
+        params={
+            "fields": f"{SEMANTIC_SCHOLAR_API_FIELDS},abstract,fieldsOfStudy,paperId"
+        },
+        query=query,
+        offset=offset,
+        limit=limit,
+    )
+    data = await _s2_get_with_retrying(url=endpoint, params=params, client=session)
+    documents: list[DocDetails] = []
+    for paper_data in data.get("data", []):
+        documents.append(
+            await parse_s2_to_doc_details(
+                paper_data, session, allow_missing_doi=True
+            )
+        )
+    return documents
+
+
+async def s2_paper_references(
+    paper_id: str, session: httpx.AsyncClient
+) -> list[str]:
+    """Return stable identifiers for works referenced by a Semantic Scholar paper."""
+    endpoint, params = SemanticScholarSearchType.PAST_REFERENCES.make_url_params(
+        params={"fields": "paperId,externalIds"},
+        query=paper_id,
+        limit=1000,
+    )
+    data = await _s2_get_with_retrying(url=endpoint, params=params, client=session)
+    references: list[str] = []
+    for item in data.get("data", []):
+        paper = item.get("citedPaper") or item.get("paper") or {}
+        external_ids = paper.get("externalIds") or {}
+        identifier = external_ids.get("DOI") or paper.get("paperId")
+        if identifier:
+            references.append(str(identifier))
+    return list(dict.fromkeys(references))
+
+
+async def s2_get_doc_details(
+    paper_id: str, session: httpx.AsyncClient
+) -> DocDetails | None:
+    """Fetch one Semantic Scholar paper by DOI or Semantic Scholar ID."""
+    search_type = (
+        SemanticScholarSearchType.DOI
+        if paper_id.lower().startswith("10.")
+        else SemanticScholarSearchType.PAPER
+    )
+    endpoint, params = search_type.make_url_params(
+        params={
+            "fields": f"{SEMANTIC_SCHOLAR_API_FIELDS},abstract,fieldsOfStudy,paperId"
+        },
+        query=paper_id,
+    )
+    paper_data = await _s2_get_with_retrying(url=endpoint, params=params, client=session)
+    try:
+        return await parse_s2_to_doc_details(
+            paper_data, session, allow_missing_doi=True
+        )
+    except DOINotFoundError:
+        return None

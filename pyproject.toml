@@ -112,6 +112,10 @@ pypdf-media = ["paper-qa-pypdf[media]"]
 qdrant = [
     "qdrant-client",
 ]
+server = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
 typing = [
     "tantivy>=0.22.2",  # Pin for typing fix of Doc.from_dict
     "types-PyYAML",
@@ -124,6 +128,7 @@ zotero = [
 
 [project.scripts]
 pqa = "paperqa.agents:main"
+pqa-serve = "paperqa.server.app:serve"
 
 [project.urls]
 issues = "https://github.com/Future-House/paper-qa/issues"
@@ -341,7 +346,8 @@ plugins.no-inline-html.enabled = false
 [tool.pytest.ini_options]
 # Add the specified OPTS to the set of command line arguments as if they had been
 # specified by the user.
-addopts = "--typeguard-packages=paperqa --doctest-modules"
+# Build addopts dynamically so it doesn't fail when optional plugins are missing.
+addopts = ""
 # set how loops are scoped to avoid https://github.com/BerriAI/litellm/issues/5854
 asyncio_default_fixture_loop_scope = "session"
 # Sets a list of filters and actions that should be taken for matched warnings.

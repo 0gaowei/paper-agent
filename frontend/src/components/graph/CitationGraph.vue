@@ -42,7 +42,7 @@
     <transition name="fade">
       <div v-if="selectedNode" class="node-detail">
         <div class="detail-header">
-          <h4>{{ selectedNode.title }}</h4>
+          <h4>{{ selectedNode.title || selectedNode.label || selectedNode.id }}</h4>
           <el-button :icon="Close" text circle @click="selectedNode = null" />
         </div>
         <div class="detail-content">
@@ -196,7 +196,10 @@ const initGraph = () => {
     .style('cursor', 'pointer')
   
   nodeGroup.append('text')
-    .text(d => d.title.substring(0, 15) + (d.title.length > 15 ? '...' : ''))
+    .text(d => {
+      const label = d.title || d.label || d.id
+      return label.substring(0, 15) + (label.length > 15 ? '...' : '')
+    })
     .attr('x', 0)
     .attr('y', d => d.type === 'center' ? 45 : 35)
     .attr('text-anchor', 'middle')

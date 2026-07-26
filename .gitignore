@@ -319,3 +319,6 @@ frontend/dist/
 
 # Cursor
 .cursor/
+
+# Private docs (赛题文档、项目设计稿等，不入库)
+private-docs/

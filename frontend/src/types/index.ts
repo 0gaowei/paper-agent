@@ -1,5 +1,4 @@
-// 论文类型
-export interface Paper {
+export interface AcademicPaper {
   id: string
   title: string
   authors: string[]
@@ -13,124 +12,209 @@ export interface Paper {
   pdfUrl?: string
   semanticScholarUrl?: string
   relevance?: number
+  relevanceTier?: 'high' | 'partial' | 'low' | string
+  rankingFactors?: RankingFactors
+  evidenceSnippets?: EvidenceSnippet[]
   tags?: string[]
+  provenance?: Provenance
+  // Backend (paperqa.server.schemas.AcademicPaper) additional fields — accepted
+  // when the API client surfaces raw payloads; normalize() in @/api converts
+  // them to camelCase on the wire, but the optional snake_case forms are
+  // tolerated for forward-compat with raw responses.
+  s2Id?: string
+  openalexId?: string
+  citation_count?: number
+  relevance_tier?: string
+  referenced_works?: string[]
+  citing_works?: string[]
+  source?: string
+  relevanceScore?: number
+  url?: string
 }
 
-// 查询理解结果
+export type Paper = AcademicPaper
+
+export interface QueryEntities {
+  topics: string[]
+  methods: string[]
+  datasets: string[]
+  domains: string[]
+  [key: string]: string[]
+}
+
 export interface QueryUnderstanding {
-  originalQuery: string
-  entities: {
-    topics: string[]
-    methods: string[]
-    datasets: string[]
-    domains: string[]
-  }
-  intent: 'survey' | 'specific' | 'comparative' | 'methodology'
-  queryType: string
+  originalQuery?: string
+  entities: QueryEntities
+  intent: 'survey' | 'specific' | 'comparative' | 'methodology' | 'general' | 'domain' | string
+  queryType?: string
+  summary?: string
+  // Backend fields (paperqa.server.schemas.QueryUnderstanding)
+  domain?: string
+  suitableSources?: string[]
+  subqueries?: SubQuery[]
 }
 
-// 子查询
 export interface SubQuery {
+  id?: string
+  query?: string
+  text?: string
+  type?: 'topic' | 'method' | 'dataset' | 'author' | 'venue' | string
+  intent?: string
+  resultCount?: number
+  round?: number
+}
+
+export interface RankingFactors {
+  relevance: number
+  recency: number
+  authority: number
+  diversity: number
+  [key: string]: number
+}
+
+export interface EvidenceSnippet {
+  paperId?: string
+  text: string
+  score?: number
+  query?: string
+  intent?: string
+  [key: string]: unknown
+}
+
+export interface Provenance {
+  source?: string
+  query?: string
+  iteration?: number
+  discoveredVia?: string
+  [key: string]: unknown
+}
+
+export interface UsageStats {
+  totalTokens?: number
+  tokenUsage?: number
+  inputTokens?: number
+  outputTokens?: number
+  apiCalls?: number
+  cost?: number
+  duration?: number
+  dailyTrend?: Array<{ date: string; tokens?: number; cost?: number; calls?: number }>
+  [key: string]: unknown
+}
+
+export interface SearchStats extends UsageStats {
+  totalPapers: number
+  relevantPapers: number
+}
+
+export interface ResearchSession {
   id: string
   query: string
-  type: 'topic' | 'method' | 'dataset' | 'author' | 'venue'
+  status: 'pending' | 'running' | 'completed' | 'error' | 'cancelled' | 'done'
+  understanding?: QueryUnderstanding
+  subQueries: SubQuery[]
+  papers: AcademicPaper[]
+  stats: SearchStats
+  usage?: UsageStats
+  answerSummary?: string
+  evidenceSnippets?: EvidenceSnippet[]
+  graph?: GraphData
+  provenance?: Provenance[] | Provenance
+  createdAt: string
+  completedAt?: string
+  error?: string
+  // Backend-tolerant fields (snake_case from paperqa.server.schemas.ResearchSession).
+  // The API client normalizes to camelCase, but stores/views may receive raw
+  // payloads when used outside the normal flow.
+  created_at?: string
+  updated_at?: string
+  rounds?: number
+  answer?: string
+  evidence?: Record<string, EvidenceSnippet[]>
+  stop_reason?: string
+  error_message?: string
 }
 
-// 搜索管道步骤
+export type SearchSession = ResearchSession
+
 export interface PipelineStep {
   id: string
   name: string
   status: 'pending' | 'running' | 'completed' | 'error'
   description?: string
-  result?: any
+  result?: unknown
 }
 
-// 搜索统计
-export interface SearchStats {
-  totalPapers: number
-  relevantPapers: number
-  apiCalls: number
-  tokenUsage: number
-  cost: number
-  duration: number
+export interface SSEEvent {
+  type: 'understanding' | 'subqueries' | 'round_started' | 'paper_found' | 'usage' | 'answer' | 'done' | 'error' | string
+  sessionId?: string
+  data?: unknown
+  [key: string]: unknown
 }
 
-// 搜索会话
-export interface SearchSession {
-  id: string
-  query: string
-  status: 'running' | 'completed' | 'error'
-  understanding?: QueryUnderstanding
-  subQueries: SubQuery[]
-  papers: Paper[]
-  stats: SearchStats
-  createdAt: string
-  completedAt?: string
-}
-
-// 筛选状态
 export interface FilterState {
   yearRange: [number, number]
   minRelevance: number
   sortBy: 'relevance' | 'date' | 'citations' | 'combined'
 }
 
-// 排序因素
-export interface RankingFactors {
-  relevance: number
-  recency: number
-  authority: number
-  diversity: number
-}
-
-// 引用关系
 export interface Citation {
   sourceId: string
   targetId: string
-  type: 'reference' | 'citedBy'
+  type: 'query' | 'citation' | 'cites' | 'citedBy'
 }
 
-// 图谱节点
 export interface GraphNode {
   id: string
-  title: string
-  type: 'center' | 'reference' | 'citedBy'
+  title?: string
+  label?: string
+  type: 'center' | 'iteration' | 'ref' | 'reference' | 'citedBy' | 'paper' | 'subquery' | 'query' | string
   relevance?: number
-  year?: number
+  year?: number | null
   citationCount?: number
+  relevanceTier?: string
+  isRoot?: boolean
+  source?: string | null
+  round?: number
   x?: number
   y?: number
   fx?: number | null
   fy?: number | null
 }
 
-// 图谱边
 export interface GraphEdge {
   source: string | GraphNode
   target: string | GraphNode
-  type: 'cites' | 'citedBy'
+  type: 'query' | 'citation' | 'cites' | 'citedBy' | 'spawned' | 'found' | 'references' | 'cited_by' | 'citation_expansion' | string
+  round?: number
 }
 
-// 图谱数据
 export interface GraphData {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  query?: string
+  rounds?: number
 }
 
-// 设置配置
 export interface ApiConfig {
-  provider: 'openai' | 'anthropic' | 'deepseek' | 'qwen'
-  apiKey: string
+  provider: 'openai' | 'anthropic' | 'deepseek' | 'qwen' | string
+  apiKey?: string
+  configured?: boolean
   baseUrl?: string
-  model: string
+  model?: string
 }
 
 export interface SearchConfig {
-  enableQueryDecomposition: boolean
-  enableIterativeSearch: boolean
-  enableQueryRewrite: boolean
-  maxIterations: number
-  maxResults: number
+  enableQueryDecomposition?: boolean
+  enableIterativeSearch?: boolean
+  enableQueryRewrite?: boolean
+  maxIterations?: number
+  maxResults?: number
+  [key: string]: unknown
+}
+
+export interface SessionCreateRequest {
+  query: string
+  config?: SearchConfig
 }
 
 export interface DataSourceConfig {
@@ -139,7 +223,6 @@ export interface DataSourceConfig {
   priority: number
 }
 
-// 历史记录
 export interface HistoryRecord {
   id: string
   query: string

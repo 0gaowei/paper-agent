@@ -68,6 +68,7 @@
 import { ref, reactive } from 'vue'
 import { Search, Close, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElIcon, ElButton, ElSwitch, ElInputNumber } from 'element-plus'
+import type { SearchConfig } from '@/types'
 
 const props = withDefaults(defineProps<{
   placeholder?: string
@@ -78,24 +79,17 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  search: [query: string, options: SearchOptions]
+  search: [query: string, options: SearchConfig]
   clear: []
+  setQuery: [value: string]
 }>()
-
-interface SearchOptions {
-  enableQueryDecomposition: boolean
-  enableIterativeSearch: boolean
-  enableQueryRewrite: boolean
-  maxIterations: number
-  maxResults: number
-}
 
 const searchQuery = ref('')
 const isFocused = ref(false)
 const showAdvanced = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 
-const options = reactive<SearchOptions>({
+const options = reactive<SearchConfig>({
   enableQueryDecomposition: true,
   enableIterativeSearch: true,
   enableQueryRewrite: true,
@@ -119,7 +113,11 @@ const focus = () => {
   inputRef.value?.focus()
 }
 
-defineExpose({ focus })
+const setQuery = (value: string) => {
+  searchQuery.value = value
+}
+
+defineExpose({ focus, setQuery })
 </script>
 
 <style lang="scss" scoped>

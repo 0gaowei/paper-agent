@@ -747,6 +747,35 @@ def make_default_litellm_model_list_settings(
     }
 
 
+class ResearchSettings(BaseModel):
+    """Configuration for bounded, multi-provider academic research."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    providers: list[str] = Field(
+        default_factory=lambda: ["semantic_scholar", "openalex"]
+    )
+    max_rounds: int = Field(default=3, ge=1)
+    max_candidates_per_round: int = Field(default=20, ge=1)
+    max_references_per_node: int = Field(default=10, ge=0)
+    partial_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    high_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    ranking_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "relevance": 0.55,
+            "recency": 0.15,
+            "citation": 0.15,
+            "diversity": 0.15,
+        }
+    )
+    per_field_quota: dict[str, int] = Field(default_factory=dict)
+    concurrency: int = Field(default=4, ge=1)
+    llm_budget_usd: float = Field(default=5.0, ge=0.0)
+    token_budget: int = Field(default=200_000, ge=0)
+    api_budget: int = Field(default=1000, ge=0)
+    embedding_model: str | None = None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -849,6 +878,7 @@ class Settings(BaseSettings):
     parsing: ParsingSettings = Field(default_factory=ParsingSettings)
     prompts: PromptSettings = Field(default_factory=PromptSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
+    research: ResearchSettings = Field(default_factory=ResearchSettings)
 
     def get_index_name(self) -> str:
         """Get programmatically generated index name.

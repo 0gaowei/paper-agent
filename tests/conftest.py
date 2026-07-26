@@ -14,7 +14,10 @@ import httpx_aiohttp
 import litellm.llms.custom_httpx.aiohttp_transport
 import pytest
 import vcr.stubs.aiohttp_stubs
-import vcr.stubs.httpcore_stubs
+try:
+    import vcr.stubs.httpcore_stubs as _vcr_httpcore_stubs  # older vcr
+except ImportError:  # vcr >= 8.3.0 renamed this module to httpx_stubs
+    import vcr.stubs.httpx_stubs as _vcr_httpcore_stubs  # type: ignore[no-redef]
 from dotenv import load_dotenv
 from lmi.utils import (
     ANTHROPIC_API_KEY_HEADER,
@@ -235,7 +238,7 @@ httpx_aiohttp.transport.AiohttpResponseStream = (  # type: ignore[misc]
 
 # Permanently patch vcrpy's async VCR recording functionality,
 # to work around https://github.com/kevin1024/vcrpy/issues/944
-vcr.stubs.httpcore_stubs._vcr_handle_async_request = _vcr_handle_async_request
+_vcr_httpcore_stubs._vcr_handle_async_request = _vcr_handle_async_request
 
 # Permanently patch vcrpy's aiohttp build_response to set raw_headers,
 # to work around https://github.com/kevin1024/vcrpy/issues/970
