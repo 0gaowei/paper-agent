@@ -91,7 +91,9 @@ export const useSearchStore = defineStore('search', () => {
         setStep('4', 'completed', data)
         break
       case 'done':
-        session.value!.status = 'completed'
+        if (session.value!.status !== 'error') {
+          session.value!.status = 'completed'
+        }
         session.value!.completedAt = new Date().toISOString()
         setStep('3', 'completed')
         setStep('4', 'completed', data)
@@ -100,8 +102,9 @@ export const useSearchStore = defineStore('search', () => {
         eventSource = null
         break
       case 'error':
+        const errorMsg = String((data as { error?: string }).error ?? (data as { message?: string }).message ?? event.error ?? '搜索失败')
         session.value!.status = 'error'
-        session.value!.error = String((data as { error?: string }).error ?? event.error ?? '搜索失败')
+        session.value!.error = errorMsg
         pipeline.value.forEach(step => { if (step.status === 'running') step.status = 'error' })
         isSearching.value = false
         cancelSearchSubscription(eventSource)

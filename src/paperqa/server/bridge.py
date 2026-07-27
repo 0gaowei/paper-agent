@@ -326,6 +326,33 @@ class ResearchEventBridge:
         events.append(
             self._emit(EventType.USAGE, _to_server_usage(self.rs.usage).model_dump())
         )
+
+        # Emit ERROR event if the session encountered an error.
+        # The engine may set session.error without setting stop_reason=ERROR
+        # (e.g. evidence/answer stage catches exceptions internally and falls
+        # back to abstracts). We check both signals.
+        is_error_stop = (
+            self.rs.stop_reason is not None
+            and str(self.rs.stop_reason.value).endswith("error")
+        )
+        if is_error_stop or self.rs.error:
+            error_msg = self.rs.error or (
+                f"Search failed: {self.rs.stop_reason.value}"
+                if self.rs.stop_reason
+                else "Unknown error"
+            )
+            events.append(
+                self._emit(
+                    EventType.ERROR,
+                    {
+                        "error": error_msg,
+                        "stop_reason": str(self.rs.stop_reason.value)
+                        if self.rs.stop_reason
+                        else None,
+                    },
+                )
+            )
+
         events.append(
             self._emit(
                 EventType.DONE,

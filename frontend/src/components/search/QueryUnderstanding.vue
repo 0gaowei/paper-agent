@@ -11,76 +11,52 @@
         <span class="query-text">{{ understanding.originalQuery }}</span>
       </div>
       
-      <div class="entity-section">
+      <div class="entity-section" v-if="entityList.length > 0">
         <div class="entity-group">
           <div class="entity-label">
             <el-icon><Collection /></el-icon>
-            <span>主题</span>
+            <span>识别实体</span>
           </div>
           <div class="entity-tags">
             <el-tag
-              v-for="topic in understanding.entities.topics"
-              :key="topic"
+              v-for="(entity, idx) in entityList"
+              :key="idx"
               size="small"
-              type="primary"
+              :type="tagType(idx)"
             >
-              {{ topic }}
+              {{ entity }}
             </el-tag>
-            <span v-if="!understanding.entities.topics.length" class="empty-text">未识别到主题</span>
           </div>
         </div>
-        
-        <div class="entity-group">
-          <div class="entity-label">
-            <el-icon><Tools /></el-icon>
-            <span>方法</span>
-          </div>
-          <div class="entity-tags">
-            <el-tag
-              v-for="method in understanding.entities.methods"
-              :key="method"
-              size="small"
-              type="success"
-            >
-              {{ method }}
-            </el-tag>
-            <span v-if="!understanding.entities.methods.length" class="empty-text">未识别到方法</span>
-          </div>
-        </div>
-        
-        <div class="entity-group">
-          <div class="entity-label">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>数据集</span>
-          </div>
-          <div class="entity-tags">
-            <el-tag
-              v-for="dataset in understanding.entities.datasets"
-              :key="dataset"
-              size="small"
-              type="warning"
-            >
-              {{ dataset }}
-            </el-tag>
-            <span v-if="!understanding.entities.datasets.length" class="empty-text">未识别到数据集</span>
-          </div>
-        </div>
-        
+      </div>
+      
+      <div class="entity-section" v-if="understanding.domain">
         <div class="entity-group">
           <div class="entity-label">
             <el-icon><Grid /></el-icon>
             <span>领域</span>
           </div>
           <div class="entity-tags">
+            <el-tag size="small" type="info">{{ understanding.domain }}</el-tag>
+          </div>
+        </div>
+      </div>
+      
+      <div class="entity-section" v-if="suitableSources.length > 0">
+        <div class="entity-group">
+          <div class="entity-label">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>数据源</span>
+          </div>
+          <div class="entity-tags">
             <el-tag
-              v-for="domain in understanding.entities.domains"
-              :key="domain"
+              v-for="source in suitableSources"
+              :key="source"
               size="small"
-              type="info"
+              type="warning"
             >
-              {{ domain }}
+              {{ source }}
             </el-tag>
-            <span v-if="!understanding.entities.domains.length" class="empty-text">未识别到领域</span>
           </div>
         </div>
       </div>
@@ -99,18 +75,47 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Connection, Collection, Tools, DataAnalysis, Grid } from '@element-plus/icons-vue'
+import { Connection, Collection, DataAnalysis, Grid } from '@element-plus/icons-vue'
 import type { QueryUnderstanding } from '@/types'
 
 const props = defineProps<{
   understanding: QueryUnderstanding | undefined
 }>()
 
+// Backend sends entities as a flat array of strings (e.g. ["mamba snake", "Mamba framework"])
+const entityList = computed(() => {
+  const entities = props.understanding?.entities
+  if (Array.isArray(entities)) return entities
+  if (entities && typeof entities === 'object') {
+    // Legacy format with topics/methods/datasets/domains sub-arrays
+    const e = entities as Record<string, unknown>
+    return [
+      ...(Array.isArray(e.topics) ? e.topics as string[] : []),
+      ...(Array.isArray(e.methods) ? e.methods as string[] : []),
+      ...(Array.isArray(e.datasets) ? e.datasets as string[] : []),
+      ...(Array.isArray(e.domains) ? e.domains as string[] : []),
+    ]
+  }
+  return []
+})
+
+const suitableSources = computed(() => {
+  return Array.isArray(props.understanding?.suitableSources)
+    ? props.understanding!.suitableSources
+    : []
+})
+
+const tagTypes = ['primary', 'success', 'warning', 'info'] as const
+const tagType = (idx: number) => tagTypes[idx % tagTypes.length]
+
 const intentText = computed(() => {
   const intentMap: Record<string, string> = {
+    general: '通用查询',
     survey: '综述查询',
     specific: '具体查询',
     comparative: '对比查询',
+    current_state: '现状查询',
+    background: '背景查询',
     methodology: '方法查询'
   }
   return intentMap[props.understanding?.intent || ''] || '未知'
@@ -118,9 +123,12 @@ const intentText = computed(() => {
 
 const intentType = computed(() => {
   const typeMap: Record<string, string> = {
+    general: 'info',
     survey: 'primary',
     specific: 'success',
     comparative: 'warning',
+    current_state: 'primary',
+    background: 'info',
     methodology: 'info'
   }
   return typeMap[props.understanding?.intent || ''] || 'info'

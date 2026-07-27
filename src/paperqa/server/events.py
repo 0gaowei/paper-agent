@@ -18,6 +18,11 @@ class EventType(str, Enum):
 
     UNDERSTANDING = "understanding"
     SUBQUERIES = "subqueries"
+    HEURISTIC_WARNING = "heuristic_warning"
+    EVIDENCE_EXTRACTION_START = "evidence_extraction_start"
+    EVIDENCE_EXTRACTION_DONE = "evidence_extraction_done"
+    ANSWER_SYNTHESIS_START = "answer_synthesis_start"
+    ANSWER_SYNTHESIS_DONE = "answer_synthesis_done"
     ROUND_STARTED = "round_started"
     PAPER_FOUND = "paper_found"
     CITATION_EXPANDED = "citation_expanded"

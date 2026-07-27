@@ -260,6 +260,12 @@ class HistoryEntry(BaseModel):
     answer_length: int = Field(
         default=0, description="Character length of the answer."
     )
+    duration: float = Field(
+        default=0.0, description="Session duration in seconds."
+    )
+    cost: float = Field(
+        default=0.0, description="Total cost in USD."
+    )
 
 
 class SettingsPayload(BaseModel):
@@ -276,6 +282,19 @@ class SettingsPayload(BaseModel):
     summary_llm: str | None = Field(
         default=None,
         description="LLM model used for summarization.",
+    )
+    # API configuration fields (stored server-side, returned without exposing secrets)
+    llm_api_key: str | None = Field(
+        default=None,
+        description="LLM API key (stored server-side, never returned to client).",
+    )
+    llm_base_url: str | None = Field(
+        default=None,
+        description="LLM base URL for custom endpoints.",
+    )
+    llm_provider: str | None = Field(
+        default=None,
+        description="LLM provider (e.g., openai, anthropic).",
     )
     max_rounds: int | None = Field(
         default=None, ge=1, description="Maximum research rounds."

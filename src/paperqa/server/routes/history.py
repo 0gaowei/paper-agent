@@ -33,6 +33,15 @@ async def list_history(
     for session in sessions:
         if session.status not in ("done", "cancelled", "error"):
             continue
+        # Compute duration from timestamps (seconds)
+        duration = 0.0
+        if session.updated_at and session.created_at:
+            try:
+                delta = session.updated_at - session.created_at
+                duration = max(0.0, delta.total_seconds())
+            except (TypeError, ValueError):
+                pass
+        cost = float(getattr(getattr(session, "usage", None), "total_cost", 0.0) or 0.0)
         entries.append(
             HistoryEntry(
                 id=session.id,
@@ -43,6 +52,8 @@ async def list_history(
                 papers_count=len(session.papers),
                 rounds=session.rounds,
                 answer_length=len(session.answer) if session.answer else 0,
+                duration=duration,
+                cost=cost,
             )
         )
     return entries

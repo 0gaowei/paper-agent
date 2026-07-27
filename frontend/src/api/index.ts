@@ -30,8 +30,9 @@ const SNAKE_TO_CAMEL_KEYS = new Set<string>([
   'max_rounds', 'candidates_per_round', 'citation_expansion_limit',
   'high_relevance_threshold', 'partial_relevance_threshold',
   'llm_configured', 's2_configured', 'openalex_configured',
-  'papers_count', 'answer_length', 'answer_summary', 'subqueries',
+  'papers_count', 'paper_count', 'answer_length', 'answer_summary', 'subqueries',
   'relevance_score', 'round_started', 'paper_found', 'events_emitted',
+  'original_query', 'suitable_sources', 'error_message', 'fallback_used',
 ])
 
 function toCamelKey(key: string): string {
@@ -187,9 +188,10 @@ export async function getSettings(): Promise<SettingsResponse> {
   const raw = unwrap(await client.get<Record<string, unknown>>('/settings'))
   return normalize({
     apiConfig: {
-      provider: 'openai',
-      model: (raw.researcher_llm as string) ?? undefined,
-      baseUrl: undefined,
+      provider: (raw.llm_provider as string) ?? 'openai',
+      model: (raw.researcher_llm as string) ?? 'gpt-4-turbo',
+      apiKey: (raw.llm_api_key as string) ?? '',
+      baseUrl: (raw.llm_base_url as string) ?? '',
       configured: Boolean(raw.llm_configured)
     } as ApiConfig,
     searchConfig: {
@@ -206,6 +208,8 @@ export async function getSettings(): Promise<SettingsResponse> {
 export async function saveSettings(settings: SettingsResponse): Promise<SettingsResponse> {
   const raw = unwrap(await client.put<Record<string, unknown>>('/settings', {
     researcher_llm: settings.apiConfig.model,
+    llm_api_key: settings.apiConfig.apiKey,
+    llm_base_url: settings.apiConfig.baseUrl,
     max_rounds: settings.searchConfig.maxIterations,
     candidates_per_round: settings.searchConfig.maxResults
   }))

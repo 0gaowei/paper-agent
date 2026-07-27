@@ -35,17 +35,17 @@ export interface AcademicPaper {
 export type Paper = AcademicPaper
 
 export interface QueryEntities {
-  topics: string[]
-  methods: string[]
-  datasets: string[]
-  domains: string[]
-  [key: string]: string[]
+  topics?: string[]
+  methods?: string[]
+  datasets?: string[]
+  domains?: string[]
+  [key: string]: string[] | undefined
 }
 
 export interface QueryUnderstanding {
   originalQuery?: string
-  entities: QueryEntities
-  intent: 'survey' | 'specific' | 'comparative' | 'methodology' | 'general' | 'domain' | string
+  entities: string[] | QueryEntities
+  intent: 'survey' | 'specific' | 'comparative' | 'methodology' | 'general' | 'current_state' | 'background' | 'domain' | string
   queryType?: string
   summary?: string
   // Backend fields (paperqa.server.schemas.QueryUnderstanding)
@@ -226,9 +226,14 @@ export interface DataSourceConfig {
 export interface HistoryRecord {
   id: string
   query: string
-  sessionId: string
-  paperCount: number
+  sessionId?: string
+  status?: string
+  papersCount?: number
+  paperCount?: number
+  rounds?: number
+  answerLength?: number
   duration: number
   cost: number
   createdAt: string
+  updatedAt?: string
 }

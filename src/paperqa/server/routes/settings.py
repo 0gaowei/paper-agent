@@ -21,10 +21,17 @@ _SETTINGS_DEFAULTS: dict[str, object] = {
     "citation_expansion_limit": 5,
     "high_relevance_threshold": 0.75,
     "partial_relevance_threshold": 0.50,
+    "llm_api_key": None,
+    "llm_base_url": None,
+    "llm_provider": "openai",
 }
 
 # In-memory mutable settings (non-API-key fields)
 _current_settings: dict[str, object] = dict(_SETTINGS_DEFAULTS)
+
+# Server-side API key storage (never exposed to client)
+_llm_api_key: str | None = None
+_llm_base_url: str | None = None
 
 
 def _check_key(env_var: str) -> bool:
@@ -51,9 +58,14 @@ async def get_settings() -> SettingsPayload:
         citation_expansion_limit=_current_settings.get("citation_expansion_limit"),
         high_relevance_threshold=_current_settings.get("high_relevance_threshold"),
         partial_relevance_threshold=_current_settings.get("partial_relevance_threshold"),
+        llm_provider=_current_settings.get("llm_provider"),
+        # API keys are never returned to client, but base URL is safe
+        llm_api_key=None,
+        llm_base_url=_llm_base_url,
         llm_configured=_check_key("OPENAI_API_KEY")
         or _check_key("ANTHROPIC_API_KEY")
-        or _check_key("LITELLM_API_KEY"),
+        or _check_key("LITELLM_API_KEY")
+        or _llm_api_key is not None,
         s2_configured=_check_key("SEMANTIC_SCHOLAR_API_KEY"),
         openalex_configured=_check_key("OPENTALEX_API_KEY"),
     )
@@ -65,12 +77,12 @@ async def get_settings() -> SettingsPayload:
     summary="Update researcher settings",
 )
 async def update_settings(payload: SettingsPayload) -> SettingsPayload:
-    """Update researcher settings (non-API-key fields only).
+    """Update researcher settings including API key and base URL.
 
-    This endpoint intentionally rejects any API keys passed in the body.
-    Only researcher LLM config, thresholds, rounds, and similar fields are accepted.
+    This endpoint accepts API keys in the payload but stores them server-side
+    and never returns them to the client.
     """
-    global _current_settings
+    global _current_settings, _llm_api_key, _llm_base_url
 
     updates: dict[str, object] = {}
     if payload.researcher_llm is not None:
@@ -87,9 +99,46 @@ async def update_settings(payload: SettingsPayload) -> SettingsPayload:
         updates["high_relevance_threshold"] = payload.high_relevance_threshold
     if payload.partial_relevance_threshold is not None:
         updates["partial_relevance_threshold"] = payload.partial_relevance_threshold
+    if payload.llm_provider is not None:
+        updates["llm_provider"] = payload.llm_provider
 
     _current_settings.update(updates)
+
+    # Store API key and base URL server-side (not in _current_settings to avoid exposure)
+    if payload.llm_api_key is not None:
+        _llm_api_key = payload.llm_api_key
+        # Also set as environment variable for litellm to pick up
+        os.environ["LLM_API_KEY"] = payload.llm_api_key
+    if payload.llm_base_url is not None:
+        _llm_base_url = payload.llm_base_url
+        os.environ["LLM_BASE_URL"] = payload.llm_base_url
+
     logger.info("Settings updated: %s", list(updates.keys()))
+    if payload.llm_api_key:
+        logger.info("API key updated (value hidden)")
+    if payload.llm_base_url:
+        logger.info("Base URL updated: %s", _llm_base_url)
+
+    # Update the engine's LLM configuration if API credentials changed
+    if payload.llm_api_key is not None or payload.llm_base_url is not None:
+        _update_engine_config()
 
     # Re-read current state for response
     return await get_settings()
+
+
+def _update_engine_config() -> None:
+    """Update the engine's LLM config with latest API credentials.
+    
+    Uses lazy import to avoid circular dependency.
+    """
+    try:
+        from paperqa.server.app import update_engine_llm_config
+        update_engine_llm_config()
+    except ImportError:
+        pass  # App not fully initialized yet
+
+
+def get_llm_credentials() -> tuple[str | None, str | None]:
+    """Get the stored LLM API key and base URL for engine initialization."""
+    return _llm_api_key, _llm_base_url

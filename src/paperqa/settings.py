@@ -726,22 +726,27 @@ class AgentSettings(BaseModel):
 
 
 def make_default_litellm_model_list_settings(
-    llm: str, temperature: float = 0.0
+    llm: str, temperature: float = 0.0, api_key: str | None = None, api_base: str | None = None
 ) -> dict:
     """Settings matching "model_list" schema here: https://docs.litellm.ai/docs/routing."""
+    litellm_params: dict[str, Any] = {
+        "model": llm,
+        "temperature": temperature,
+        # SEE: https://docs.litellm.ai/docs/tutorials/prompt_caching#litellm-python-sdk-usage
+        "cache_control_injection_points": [
+            {"location": "message", "role": "system"}
+        ],
+    }
+    if api_key:
+        litellm_params["api_key"] = api_key
+    if api_base:
+        litellm_params["api_base"] = api_base
     return {
         "name": llm,
         "model_list": [
             {
                 "model_name": llm,
-                "litellm_params": {
-                    "model": llm,
-                    "temperature": temperature,
-                    # SEE: https://docs.litellm.ai/docs/tutorials/prompt_caching#litellm-python-sdk-usage
-                    "cache_control_injection_points": [
-                        {"location": "message", "role": "system"}
-                    ],
-                },
+                "litellm_params": litellm_params,
             }
         ],
     }
@@ -830,6 +835,15 @@ class Settings(BaseSettings):
     )
     temperature: float = Field(default=0.0, description="Temperature for LLMs.")
     batch_size: int = Field(default=1, description="Batch size for calling LLMs.")
+    # API credentials (can be set via UI settings page)
+    llm_api_key: str | None = Field(
+        default=None,
+        description="LLM API key (overrides environment variable).",
+    )
+    llm_base_url: str | None = Field(
+        default=None,
+        description="LLM base URL for custom endpoints (e.g., OpenAI compatible).",
+    )
     texts_index_mmr_lambda: float = Field(
         default=1.0, description="Lambda for MMR in text index."
     )
@@ -956,7 +970,9 @@ class Settings(BaseSettings):
         return LiteLLMModel(
             name=self.llm,
             config=self.llm_config
-            or make_default_litellm_model_list_settings(self.llm, self.temperature),
+            or make_default_litellm_model_list_settings(
+                self.llm, self.temperature, self.llm_api_key, self.llm_base_url
+            ),
         )
 
     def get_summary_llm(self) -> LiteLLMModel:
@@ -964,7 +980,7 @@ class Settings(BaseSettings):
             name=self.summary_llm,
             config=self.summary_llm_config
             or make_default_litellm_model_list_settings(
-                self.summary_llm, self.temperature
+                self.summary_llm, self.temperature, self.llm_api_key, self.llm_base_url
             ),
         )
 
@@ -973,7 +989,7 @@ class Settings(BaseSettings):
             name=self.agent.agent_llm,
             config=self.agent.agent_llm_config
             or make_default_litellm_model_list_settings(
-                self.agent.agent_llm, self.temperature
+                self.agent.agent_llm, self.temperature, self.llm_api_key, self.llm_base_url
             ),
         )
 
@@ -985,7 +1001,8 @@ class Settings(BaseSettings):
             name=self.parsing.enrichment_llm,
             config=self.parsing.enrichment_llm_config
             or make_default_litellm_model_list_settings(
-                self.parsing.enrichment_llm, self.temperature
+                self.parsing.enrichment_llm, self.temperature,
+                self.llm_api_key, self.llm_base_url
             ),
         )
 

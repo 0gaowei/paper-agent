@@ -40,6 +40,7 @@ async def _run_research_engine(
         ResearchEventBridge,
         research_to_server_session,
     )
+    from paperqa.research.query_understanding import analyze_and_expand_query
 
     engine = getattr(app.state, "engine", None)
     repository: JSONFileRepository = app.state.repository
@@ -50,7 +51,7 @@ async def _run_research_engine(
                 session_id,
                 SSEEvent(
                     event=EventType.ERROR,
-                    data={"message": "ResearchEngine is not configured on this server."},
+                    data={"error": "ResearchEngine is not configured on this server."},
                 ),
             )
             await publisher.publish(
@@ -64,7 +65,31 @@ async def _run_research_engine(
                 await repository.save(session)
             return
 
-        research_session = await engine.arun(query)
+        tracked_llm = engine.llm_model
+        precomputed_understanding = await analyze_and_expand_query(
+            query, engine.settings, tracked_llm
+        )
+        if precomputed_understanding.fallback_used:
+            await publisher.publish(
+                session_id,
+                SSEEvent(
+                    event=EventType.HEURISTIC_WARNING,
+                    data={
+                        "message": (
+                            "No LLM available for query understanding. "
+                            "Using heuristic fallback with limited understanding."
+                        ),
+                        "error": precomputed_understanding.error_message,
+                    },
+                ),
+            )
+
+        research_session = await engine.arun(
+            query,
+            precomputed_understanding=precomputed_understanding,
+            publisher=publisher,
+            session_id=session_id,
+        )
         server_session = research_to_server_session(research_session, session_id)
         await repository.save(server_session)
 
@@ -91,11 +116,12 @@ async def _run_research_engine(
         raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("ResearchEngine run failed for %s", session_id)
+        error_msg = f"ResearchEngine failure: {exc!s}"
         await publisher.publish(
             session_id,
             SSEEvent(
                 event=EventType.ERROR,
-                data={"message": f"ResearchEngine failure: {exc!s}"},
+                data={"error": error_msg},
             ),
         )
         await publisher.publish(

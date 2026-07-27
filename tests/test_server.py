@@ -90,8 +90,18 @@ class _StubResearchEngine:
         self._results = results or []
         self.arun_calls: list[str] = []
         self.closed = False
+        self.llm_model = None
+        self.settings = None
 
-    async def arun(self, query: str) -> Any:
+    async def arun(
+        self,
+        query: str,
+        *,
+        max_high_relevant: int | None = None,
+        precomputed_understanding: Any | None = None,
+        publisher: Any | None = None,
+        session_id: str | None = None,
+    ) -> Any:
         from paperqa.research.models import (
             AnswerSummary,
             QueryUnderstanding,
@@ -106,6 +116,27 @@ class _StubResearchEngine:
         # Yield to the event loop so SSE consumers can interleave with
         # background publishers when running under TestClient.
         await asyncio.sleep(0)
+
+        if publisher and session_id:
+            from paperqa.server.events import EventType, SSEEvent
+
+            await publisher.publish(
+                session_id,
+                SSEEvent(event=EventType.EVIDENCE_EXTRACTION_START, data={}),
+            )
+            await publisher.publish(
+                session_id,
+                SSEEvent(event=EventType.EVIDENCE_EXTRACTION_DONE, data={"snippets_found": 2}),
+            )
+            await publisher.publish(
+                session_id,
+                SSEEvent(event=EventType.ANSWER_SYNTHESIS_START, data={}),
+            )
+            await publisher.publish(
+                session_id,
+                SSEEvent(event=EventType.ANSWER_SYNTHESIS_DONE, data={"answer_length": 20}),
+            )
+
         papers = {
             "paper-1": _stub_paper(
                 "paper-1", f"Research on: {query}", 2024, "high", 42,
@@ -221,11 +252,13 @@ class TestSettings:
         assert "llm_configured" in data
         assert "s2_configured" in data
         assert "openalex_configured" in data
-        # Must not contain any key strings
-        for key in data:
-            assert "key" not in key.lower() or "configured" in key.lower(), (
-                f"Unexpected key in settings response: {key}"
-            )
+        # Must not contain any key strings (unless the value is null, meaning
+        # the field is present in the schema but the actual key is not exposed)
+        for key, value in data.items():
+            if "key" in key.lower() and "configured" not in key.lower():
+                assert value is None, (
+                    f"API key field {key!r} must be null in response, got {value!r}"
+                )
         # Values must be booleans or strings/numbers
         assert isinstance(data.get("llm_configured"), bool)
         assert isinstance(data.get("s2_configured"), bool)
@@ -254,10 +287,14 @@ class TestSettings:
         }
         response = client.put("/api/settings", json=payload)
         assert response.status_code == 200
-        # Keys must not appear in response
+        # Keys must not appear in response with actual values
+        # (llm_api_key field may be present in schema but its value must be null)
         data = response.json()
-        for key in data:
-            assert "key" not in key.lower() or "configured" in key.lower()
+        for key, value in data.items():
+            if "key" in key.lower() and "configured" not in key.lower():
+                assert value is None, (
+                    f"API key field {key!r} must be null in response, got {value!r}"
+                )
 
 
 # ---------------------------------------------------------------------------

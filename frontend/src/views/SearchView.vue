@@ -59,6 +59,14 @@
           <QueryUnderstanding :understanding="searchStore.session.understanding" />
         </div>
         
+        <div v-if="searchStore.session?.error" class="error-section">
+          <el-alert type="error" :title="searchStore.session.error" :closable="false" show-icon>
+            <template #default>
+              <p>搜索过程中遇到错误，请检查 API 配置或稍后重试。</p>
+            </template>
+          </el-alert>
+        </div>
+
         <div v-if="searchStore.session?.stats" class="stats-section">
           <div class="section-header">
             <h2>搜索统计</h2>
@@ -268,6 +276,16 @@ onMounted(() => {
 
 .understanding-section {
   margin: 20px 0;
+}
+
+.error-section {
+  margin: 20px 0;
+  padding: 0 16px;
+
+  :deep(.el-alert) {
+    border-radius: 12px;
+    border: 1px solid var(--el-color-danger-light-8);
+  }
 }
 
 .stats-section {

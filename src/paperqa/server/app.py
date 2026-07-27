@@ -40,6 +40,7 @@ def _build_research_engine(
     try:
         from paperqa.research import ResearchEngine
         from paperqa.settings import Settings
+        from paperqa.server.routes.settings import get_llm_credentials
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "ResearchEngine unavailable; create_session will return 503: %s", exc
@@ -47,6 +48,12 @@ def _build_research_engine(
         return None
     try:
         settings = Settings()
+        # Apply API credentials from settings page if configured
+        llm_api_key, llm_base_url = get_llm_credentials()
+        if llm_api_key:
+            settings.llm_api_key = llm_api_key
+        if llm_base_url:
+            settings.llm_base_url = llm_base_url
         if providers is not None:
             settings.research.providers = providers
         return ResearchEngine(settings=settings, providers=client)
@@ -55,6 +62,27 @@ def _build_research_engine(
             "ResearchEngine init failed; create_session will return 503: %s", exc
         )
         return None
+
+
+def update_engine_llm_config() -> None:
+    """Update the engine's LLM configuration with latest API credentials.
+    
+    Call this after settings are updated to ensure the engine uses the new config.
+    """
+    from paperqa.server.routes.settings import get_llm_credentials
+
+    # Access the running app's engine via the module-level app instance
+    from paperqa.server.app import app
+    engine = getattr(app.state, "engine", None)
+    if engine is not None and hasattr(engine, "settings"):
+        llm_api_key, llm_base_url = get_llm_credentials()
+        if llm_api_key:
+            engine.settings.llm_api_key = llm_api_key
+        if llm_base_url:
+            engine.settings.llm_base_url = llm_base_url
+        # Reinitialize the LLM model with new credentials
+        engine.llm_model = engine.settings.get_llm()
+        logger.info("Engine LLM config updated with latest API credentials")
 
 
 # ---------------------------------------------------------------------------

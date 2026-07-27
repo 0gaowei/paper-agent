@@ -35,15 +35,15 @@
                 <div class="record-meta">
                   <span class="meta-item">
                     <el-icon><Document /></el-icon>
-                    {{ record.paperCount }} 篇论文
+                    {{ record.papersCount ?? record.paperCount ?? 0 }} 篇论文
                   </span>
                   <span class="meta-item">
                     <el-icon><Timer /></el-icon>
-                    {{ record.duration.toFixed(1) }}s
+                    {{ (record.duration ?? 0).toFixed(1) }}s
                   </span>
                   <span class="meta-item">
                     <el-icon><Coin /></el-icon>
-                    ${{ record.cost.toFixed(2) }}
+                    ${{ (record.cost ?? 0).toFixed(2) }}
                   </span>
                 </div>
               </div>
@@ -118,7 +118,7 @@ const refreshHistory = async () => {
 }
 
 const viewResults = (record: HistoryRecord) => {
-  router.push({ name: 'Results', params: { sessionId: record.sessionId } })
+  router.push({ name: 'Results', params: { sessionId: record.sessionId ?? record.id } })
 }
 
 const rerunSearch = async (record: HistoryRecord) => {

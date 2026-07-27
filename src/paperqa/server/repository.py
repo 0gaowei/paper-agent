@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import anyio
@@ -138,7 +139,13 @@ class JSONFileRepository:
         except FileNotFoundError:
             pass  # Directory does not exist yet
 
-        sessions.sort(key=lambda s: s.updated_at, reverse=True)
+        def _sort_key(s: "ResearchSession") -> datetime:
+            ts = s.updated_at
+            if ts.tzinfo is None:
+                return ts.replace(tzinfo=UTC)
+            return ts
+
+        sessions.sort(key=_sort_key, reverse=True)
         return sessions[:limit]
 
     async def exists(self, session_id: str) -> bool:
