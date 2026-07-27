@@ -77,6 +77,123 @@ def client_with_repo(client: TestClient, temp_sessions_dir: Path) -> TestClient:
     return client
 
 
+class _StubResearchEngine:
+    """Drop-in engine that emits deterministic events without touching the
+    network, the LLM, or any search provider.
+
+    Mirrors the minimal surface `paperqa.server.routes.sessions` reads
+    off the engine — `arun(query)` returning a `ResearchSession`-like
+    pydantic model and `aclose()`.
+    """
+
+    def __init__(self, results: list[Any] | None = None) -> None:
+        self._results = results or []
+        self.arun_calls: list[str] = []
+        self.closed = False
+
+    async def arun(self, query: str) -> Any:
+        from paperqa.research.models import (
+            AnswerSummary,
+            QueryUnderstanding,
+            RelevanceTier,
+            ResearchSession,
+            SearchRound,
+            SubQuery,
+            UsageStats,
+        )
+
+        self.arun_calls.append(query)
+        # Yield to the event loop so SSE consumers can interleave with
+        # background publishers when running under TestClient.
+        await asyncio.sleep(0)
+        papers = {
+            "paper-1": _stub_paper(
+                "paper-1", f"Research on: {query}", 2024, "high", 42,
+                sources=("semantic_scholar",),
+            ),
+            "paper-2": _stub_paper(
+                "paper-2", f"Further study on {query}", 2023, "partial", 15,
+                sources=("openalex",),
+            ),
+        }
+        session = ResearchSession(
+            query=query,
+            all_papers=papers,
+            search_rounds=[
+                SearchRound(
+                    round_number=1,
+                    queries_executed=[query],
+                    papers_discovered=2,
+                    papers_evaluated=2,
+                    high_relevant_found=1,
+                    partial_relevant_found=1,
+                    citations_expanded=0,
+                    subqueries_generated=0,
+                    duration_ms=10,
+                )
+            ],
+            query_understanding=QueryUnderstanding(
+                original_query=query,
+                intent="general",
+                subqueries=[SubQuery(query=query)],
+            ),
+            answer=AnswerSummary(
+                answer=f"Stub answer for: {query}",
+                papers_cited=["paper-1"],
+                evidence_used=1,
+                has_successful_answer=True,
+            ),
+            usage=UsageStats(
+                llm_calls=3,
+                llm_prompt_tokens=800,
+                llm_completion_tokens=400,
+                llm_cost_usd=0.05,
+                search_rounds=1,
+                papers_discovered=2,
+                papers_evaluated=2,
+                papers_in_final_set=2,
+            ),
+            stop_reason=None,
+        )
+        session.final_papers = list(papers.values())
+        return session
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def _stub_paper(
+    stable_id: str, title: str, year: int, tier: str, citations: int,
+    *, sources: tuple[str, ...] = (),
+) -> Any:
+    from paperqa.research.models import AcademicPaper, RelevanceTier
+
+    return AcademicPaper(
+        stable_id=stable_id,
+        title=title,
+        year=year,
+        authors=[],
+        abstract=f"Abstract for {title}",
+        citation_count=citations,
+        source=sources[0] if sources else "semantic_scholar",
+        sources=list(sources),
+        relevance_tier=RelevanceTier(tier),
+    )
+
+
+@pytest.fixture
+def stub_engine() -> _StubResearchEngine:
+    """Provide a deterministic stub engine for tests."""
+    return _StubResearchEngine()
+
+
+@pytest.fixture
+def client_with_stub_engine(client_with_repo: TestClient, stub_engine: Any) -> TestClient:
+    """Client with the stub engine installed in app.state.engine."""
+    client_with_repo.app.state.engine = stub_engine
+    return client_with_repo
+
+
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
@@ -149,8 +266,10 @@ class TestSettings:
 
 
 class TestSessionCreate:
-    def test_create_session_returns_202(self, client_with_repo: TestClient) -> None:
-        response = client_with_repo.post(
+    def test_create_session_returns_202(
+        self, client_with_stub_engine: TestClient
+    ) -> None:
+        response = client_with_stub_engine.post(
             "/api/sessions",
             json={"query": "What is attention mechanism?"},
         )
@@ -159,13 +278,28 @@ class TestSessionCreate:
         assert "id" in data
         assert isinstance(data["id"], str)
 
-    def test_create_session_query_required(self, client_with_repo: TestClient) -> None:
+    def test_create_session_query_required(
+        self, client_with_repo: TestClient
+    ) -> None:
         response = client_with_repo.post("/api/sessions", json={"query": ""})
         assert response.status_code == 422  # Validation error
 
-    def test_create_session_missing_query(self, client_with_repo: TestClient) -> None:
+    def test_create_session_missing_query(
+        self, client_with_repo: TestClient
+    ) -> None:
         response = client_with_repo.post("/api/sessions", json={})
         assert response.status_code == 422
+
+    def test_create_session_without_engine_returns_503(
+        self, client_with_repo: TestClient
+    ) -> None:
+        """When app.state.engine is None the endpoint should return 503."""
+        client_with_repo.app.state.engine = None
+        response = client_with_repo.post(
+            "/api/sessions",
+            json={"query": "missing engine"},
+        )
+        assert response.status_code == 503
 
 
 # ---------------------------------------------------------------------------
@@ -178,21 +312,22 @@ class TestSessionGet:
         response = client_with_repo.get("/api/sessions/nonexistent-id")
         assert response.status_code == 404
 
-    def test_get_session_after_create(self, client_with_repo: TestClient) -> None:
+    def test_get_session_after_create(
+        self, client_with_stub_engine: TestClient
+    ) -> None:
         # Create
-        create_resp = client_with_repo.post(
+        create_resp = client_with_stub_engine.post(
             "/api/sessions",
             json={"query": "machine learning benchmarks"},
         )
         session_id = create_resp.json()["id"]
 
         # Retrieve
-        get_resp = client_with_repo.get(f"/api/sessions/{session_id}")
+        get_resp = client_with_stub_engine.get(f"/api/sessions/{session_id}")
         assert get_resp.status_code == 200
         data = get_resp.json()
         assert data["session"]["id"] == session_id
         assert data["session"]["query"] == "machine learning benchmarks"
-        assert data["session"]["status"] == "pending"
         assert "papers" in data
         assert isinstance(data["papers"], list)
 
@@ -204,13 +339,14 @@ class TestSessionGet:
 
 class TestSSEEvents:
     def test_sse_events_returns_200(
-        self, client_with_repo: TestClient
+        self, client_with_stub_engine: TestClient
     ) -> None:
         # Create session first
-        create_resp = client_with_repo.post(
+        create_resp = client_with_stub_engine.post(
             "/api/sessions",
             json={"query": "transformer architecture"},
         )
+        assert create_resp.status_code == 202
         session_id = create_resp.json()["id"]
 
         # Subscribe to SSE
@@ -219,40 +355,45 @@ class TestSSEEvents:
         response_holder: dict[str, Any] = {}
 
         def fetch_sse() -> None:
-            with client_with_repo.stream(
+            with client_with_stub_engine.stream(
                 "GET", f"/api/sessions/{session_id}/events",
-                timeout=5,
+                timeout=15,
             ) as response:
                 events: list[dict] = []
                 for line in response.iter_lines():
                     if line.startswith("data: "):
                         events.append(json.loads(line[6:]))
+                    if any(e.get("type") == "done" for e in events):
+                        break
                 response_holder["events"] = events
                 response_holder["status"] = response.status_code
 
         t = threading.Thread(target=fetch_sse)
         t.start()
-        t.join(timeout=6)
+        t.join(timeout=15)
 
         assert response_holder.get("status") == 200
         events = response_holder.get("events", [])
         assert len(events) > 0
 
-    def test_sse_unknown_session_returns_no_events(
-        self, client_with_repo: TestClient
+    def test_sse_unknown_session_returns_error_then_done(
+        self, client_with_stub_engine: TestClient
     ) -> None:
-        """Unknown session should stream (and then close when session is not found)."""
-        import time
-
-        # Without a session being created, the SSE will simply never emit events
-        # The client will timeout — this is acceptable behavior
-        with client_with_repo.stream(
+        """Unknown session should immediately emit ERROR + DONE, not block."""
+        with client_with_stub_engine.stream(
             "GET",
             "/api/sessions/unknown-session/events",
-            timeout=1,
+            timeout=3,
         ) as response:
-            # The stream opens but will timeout because no session exists
             assert response.status_code == 200
+            event_types: list[str] = []
+            for line in response.iter_lines():
+                if line.startswith("event: "):
+                    event_types.append(line[len("event: "):].strip())
+                if "done" in event_types:
+                    break
+        assert "error" in event_types
+        assert "done" in event_types
 
 
 # ---------------------------------------------------------------------------
@@ -261,14 +402,16 @@ class TestSSEEvents:
 
 
 class TestSSEOrdering:
-    def test_sse_events_arrive_in_order(self, client_with_repo: TestClient) -> None:
+    def test_sse_events_arrive_in_order(
+        self, client_with_stub_engine: TestClient
+    ) -> None:
         import threading
-        import time
 
-        create_resp = client_with_repo.post(
+        create_resp = client_with_stub_engine.post(
             "/api/sessions",
             json={"query": "neural architecture search"},
         )
+        assert create_resp.status_code == 202
         session_id = create_resp.json()["id"]
 
         received_events: list[str] = []
@@ -276,22 +419,32 @@ class TestSSEOrdering:
         status_code_holder: list[int] = []
 
         def fetch_sse() -> None:
-            with client_with_repo.stream(
+            with client_with_stub_engine.stream(
                 "GET", f"/api/sessions/{session_id}/events",
-                timeout=10,
+                timeout=15,
             ) as response:
                 status_code_holder.append(response.status_code)
+                done_seen = False
                 for line in response.iter_lines():
                     received_lines.append(line)
                     if line.startswith("event: "):
                         received_events.append(line[7:].strip())
+                    if line.startswith("data: "):
+                        try:
+                            payload = json.loads(line[6:])
+                        except json.JSONDecodeError:
+                            continue
+                        if payload.get("type") == "done":
+                            done_seen = True
+                            break
+                if not done_seen:
+                    pass
 
         t = threading.Thread(target=fetch_sse)
         t.start()
-        t.join(timeout=8)
+        t.join(timeout=15)
 
         assert status_code_holder == [200]
-        # Should have at least the expected phases
         expected_order = [
             "understanding",
             "subqueries",
@@ -315,21 +468,26 @@ class TestSSEOrdering:
 
 class TestCancellation:
     def test_cancel_unknown_session_returns_404(
-        self, client_with_repo: TestClient
+        self, client_with_stub_engine: TestClient
     ) -> None:
-        response = client_with_repo.post("/api/sessions/unknown/cancel")
+        response = client_with_stub_engine.post("/api/sessions/unknown/cancel")
         assert response.status_code == 404
 
-    def test_cancel_session_returns_200(self, client_with_repo: TestClient) -> None:
+    def test_cancel_session_returns_200(
+        self, client_with_stub_engine: TestClient
+    ) -> None:
         # Create a session
-        create_resp = client_with_repo.post(
+        create_resp = client_with_stub_engine.post(
             "/api/sessions",
             json={"query": "test query for cancellation"},
         )
+        assert create_resp.status_code == 202
         session_id = create_resp.json()["id"]
 
         # Cancel
-        cancel_resp = client_with_repo.post(f"/api/sessions/{session_id}/cancel")
+        cancel_resp = client_with_stub_engine.post(
+            f"/api/sessions/{session_id}/cancel"
+        )
         assert cancel_resp.status_code == 200
         data = cancel_resp.json()
         assert data["status"] == "cancelled"

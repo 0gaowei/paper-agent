@@ -8,209 +8,113 @@ import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, status
-from starlette.responses import StreamingResponse
 
 from paperqa.server.events import EventPublisher, EventType, SSEEvent
 from paperqa.server.repository import JSONFileRepository
 from paperqa.server.schemas import (
-    AcademicPaper,
-    EvidenceSnippet,
     NewSessionRequest,
-    QueryUnderstanding,
     ResearchSession,
     SessionResponse,
-    SubQuery,
-    UsageStats,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sessions"])
 
 
-def _build_phony_session(session_id: str, query: str) -> ResearchSession:
-    """Build a phony session with a few dummy papers for testing."""
-    papers: dict[str, AcademicPaper] = {
-        "paper-1": AcademicPaper(
-            id="paper-1",
-            title=f"Research on: {query}",
-            year=2024,
-            authors=["Author A.", "Author B."],
-            relevance_tier="high",
-            abstract=f"This paper discusses {query} in depth.",
-            citation_count=42,
-            source="semantic_scholar",
-        ),
-        "paper-2": AcademicPaper(
-            id="paper-2",
-            title=f"Further study on {query}",
-            year=2023,
-            authors=["Author C."],
-            relevance_tier="partial",
-            abstract=f"Additional findings related to {query}.",
-            citation_count=15,
-            source="openalex",
-        ),
-    }
-    return ResearchSession(
-        id=session_id,
-        query=query,
-        status="done",
-        created_at=datetime.datetime.utcnow(),
-        updated_at=datetime.datetime.utcnow(),
-        understanding=QueryUnderstanding(
-            intent="general",
-            domain="computer science",
-            entities=[query],
-            suitable_sources=["semantic_scholar", "openalex"],
-            subqueries=[SubQuery(text=query, intent="general", round=0)],
-        ),
-        papers=papers,
-        subqueries=[SubQuery(text=query, intent="general", round=0)],
-        rounds=1,
-        answer=(
-            f"This is a synthesized answer to the query '{query}'. "
-            "The research found 2 relevant papers."
-        ),
-        evidence={
-            "paper-1": [
-                EvidenceSnippet(
-                    text=f"Key finding from paper-1 regarding {query}.",
-                    score=8.5,
-                )
-            ]
-        },
-        stop_reason="high_relevance_collected",
-        usage=UsageStats(
-            total_tokens=1200,
-            prompt_tokens=800,
-            completion_tokens=400,
-            total_cost=0.05,
-            llm_calls=3,
-            search_calls=2,
-            rounds=1,
-        ),
+# ---------------------------------------------------------------------------
+# Background engine runner
+# ---------------------------------------------------------------------------
+
+
+async def _run_research_engine(
+    session_id: str, query: str, publisher: EventPublisher
+) -> None:
+    """Run the real ResearchEngine in the background and publish SSE events.
+
+    This coroutine is scheduled by `create_session` via
+    `asyncio.create_task(...)`. On CancelledError we emit CANCELLED and
+    update the persisted session. On any other exception we emit ERROR.
+    """
+    from paperqa.server.app import app
+    from paperqa.server.bridge import (
+        ResearchEventBridge,
+        research_to_server_session,
     )
 
+    engine = getattr(app.state, "engine", None)
+    repository: JSONFileRepository = app.state.repository
 
-async def _emit_phony_events(
-    session_id: str,
-    query: str,
-    publisher: EventPublisher,
-) -> None:
-    """Emit a sequence of phony SSE events for testing."""
-    async def emit(event_type: EventType, data: dict) -> None:
+    try:
+        if engine is None:
+            await publisher.publish(
+                session_id,
+                SSEEvent(
+                    event=EventType.ERROR,
+                    data={"message": "ResearchEngine is not configured on this server."},
+                ),
+            )
+            await publisher.publish(
+                session_id, SSEEvent(event=EventType.DONE, data={})
+            )
+            session = await repository.get(session_id)
+            if session is not None:
+                session.status = "error"
+                session.error_message = "engine_unavailable"
+                session.updated_at = datetime.datetime.utcnow()
+                await repository.save(session)
+            return
+
+        research_session = await engine.arun(query)
+        server_session = research_to_server_session(research_session, session_id)
+        await repository.save(server_session)
+
+        bridge = ResearchEventBridge(session_id, research_session)
+        for payload in bridge.build_events():
+            await publisher.publish(
+                session_id,
+                SSEEvent(event=payload["type"], data=payload["data"]),
+            )
+    except asyncio.CancelledError:
         await publisher.publish(
             session_id,
-            SSEEvent(event=event_type, data=data),
+            SSEEvent(
+                event=EventType.CANCELLED,
+                data={"reason": "Cancelled by client."},
+            ),
         )
-        await asyncio.sleep(0.05)
-
-    await emit(EventType.UNDERSTANDING, {
-        "intent": "general",
-        "domain": "computer science",
-        "entities": [query],
-        "suitable_sources": ["semantic_scholar", "openalex"],
-        "subqueries": [{"text": query, "intent": "general", "round": 0}],
-    })
-    await emit(EventType.SUBQUERIES, {
-        "subqueries": [{"text": query, "intent": "general", "round": 0}],
-    })
-    await emit(EventType.ROUND_STARTED, {"round": 0, "active_subqueries": [query]})
-    await emit(EventType.PAPER_FOUND, {
-        "id": "paper-1",
-        "title": f"Research on: {query}",
-        "year": 2024,
-        "authors": ["Author A.", "Author B."],
-        "relevance_tier": "high",
-        "abstract": f"This paper discusses {query} in depth.",
-        "citation_count": 42,
-        "source": "semantic_scholar",
-    })
-    await emit(EventType.PAPER_FOUND, {
-        "id": "paper-2",
-        "title": f"Further study on {query}",
-        "year": 2023,
-        "authors": ["Author C."],
-        "relevance_tier": "partial",
-        "abstract": f"Additional findings related to {query}.",
-        "citation_count": 15,
-        "source": "openalex",
-    })
-    await emit(EventType.PARTIAL_DOCUMENTS, {
-        "papers_count": 2,
-        "high_relevance_count": 1,
-        "partial_count": 1,
-    })
-    await emit(EventType.ANSWER, {
-        "answer": (
-            f"This is a synthesized answer to the query '{query}'. "
-            "The research found 2 relevant papers."
-        ),
-        "papers_used": ["paper-1", "paper-2"],
-    })
-    await emit(EventType.USAGE, {
-        "total_tokens": 1200,
-        "prompt_tokens": 800,
-        "completion_tokens": 400,
-        "total_cost": 0.05,
-        "llm_calls": 3,
-        "search_calls": 2,
-        "rounds": 1,
-    })
-    await emit(EventType.DONE, {
-        "stop_reason": "high_relevance_collected",
-        "rounds": 1,
-        "papers_count": 2,
-    })
+        session = await repository.get(session_id)
+        if session is not None:
+            session.status = "cancelled"
+            session.stop_reason = "cancelled"
+            session.updated_at = datetime.datetime.utcnow()
+            await repository.save(session)
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("ResearchEngine run failed for %s", session_id)
+        await publisher.publish(
+            session_id,
+            SSEEvent(
+                event=EventType.ERROR,
+                data={"message": f"ResearchEngine failure: {exc!s}"},
+            ),
+        )
+        await publisher.publish(
+            session_id, SSEEvent(event=EventType.DONE, data={})
+        )
+        session = await repository.get(session_id)
+        if session is not None:
+            session.status = "error"
+            session.error_message = str(exc)
+            session.updated_at = datetime.datetime.utcnow()
+            await repository.save(session)
+    finally:
+        tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
+        tasks.pop(session_id, None)
 
 
-def _phony_sse_stream(query: str):
-    import time
-    events = [
-        (EventType.UNDERSTANDING, {
-            "intent": "general", "domain": "computer science",
-            "entities": [query],
-            "suitable_sources": ["semantic_scholar", "openalex"],
-            "subqueries": [{"text": query, "intent": "general", "round": 0}],
-        }),
-        (EventType.SUBQUERIES, {
-            "subqueries": [{"text": query, "intent": "general", "round": 0}],
-        }),
-        (EventType.ROUND_STARTED, {"round": 0, "active_subqueries": [query]}),
-        (EventType.PAPER_FOUND, {
-            "id": "paper-1", "title": f"Research on: {query}",
-            "year": 2024, "authors": ["Author A.", "Author B."],
-            "relevance_tier": "high",
-            "abstract": f"This paper discusses {query} in depth.",
-            "citation_count": 42, "source": "semantic_scholar",
-        }),
-        (EventType.PAPER_FOUND, {
-            "id": "paper-2", "title": f"Further study on {query}",
-            "year": 2023, "authors": ["Author C."],
-            "relevance_tier": "partial",
-            "abstract": f"Additional findings related to {query}.",
-            "citation_count": 15, "source": "openalex",
-        }),
-        (EventType.PARTIAL_DOCUMENTS, {
-            "papers_count": 2, "high_relevance_count": 1, "partial_count": 1,
-        }),
-        (EventType.ANSWER, {
-            "answer": f"This is a synthesized answer to the query '{query}'. The research found 2 relevant papers.",
-            "papers_used": ["paper-1", "paper-2"],
-        }),
-        (EventType.USAGE, {
-            "total_tokens": 1200, "prompt_tokens": 800,
-            "completion_tokens": 400, "total_cost": 0.05,
-            "llm_calls": 3, "search_calls": 2, "rounds": 1,
-        }),
-        (EventType.DONE, {
-            "stop_reason": "high_relevance_collected",
-            "rounds": 1, "papers_count": 2,
-        }),
-    ]
-    for event_type, data in events:
-        time.sleep(0.05)  # simulate async delay synchronously
-        yield SSEEvent(event=event_type, data=data).to_sse_line().encode("utf-8")
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 
 @router.post(
@@ -222,16 +126,39 @@ def _phony_sse_stream(query: str):
 async def create_session(request: NewSessionRequest) -> dict:
     """Create a new research session and immediately return 202 Accepted.
 
-    The session is launched in the background. Subscribe to
-    GET /api/sessions/{id}/events for real-time progress via SSE.
+    The session is launched in the background via an `asyncio.Task`.
+    Subscribe to GET /api/sessions/{id}/events for real-time progress
+    via SSE. Returns 503 when the ResearchEngine is unavailable.
     """
     from paperqa.server.app import app
 
     session_id = str(uuid4())
     repository: JSONFileRepository = app.state.repository
+    publisher: EventPublisher = app.state.publisher
 
-    session = ResearchSession(id=session_id, query=request.query)
+    session = ResearchSession(
+        id=session_id,
+        query=request.query,
+        status="running",
+    )
     await repository.save(session)
+
+    engine = getattr(app.state, "engine", None)
+    if engine is None:
+        session.status = "error"
+        session.error_message = "engine_unavailable"
+        await repository.save(session)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ResearchEngine is not configured on this server.",
+        )
+
+    task = asyncio.create_task(
+        _run_research_engine(session_id, request.query, publisher),
+        name=f"research-{session_id}",
+    )
+    tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
+    tasks[session_id] = task
 
     return {"id": session_id}
 
@@ -285,21 +212,17 @@ async def cancel_session(session_id: str) -> dict:
             detail=f"Session {session_id!r} not found.",
         )
 
-    if session.status not in ("pending", "running"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Session {session_id!r} is already {session.status}; "
-                "cancellation is not applicable."
-            ),
-        )
+    tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
+    task = tasks.get(session_id)
 
     session.status = "cancelled"
     session.stop_reason = "cancelled"
     session.updated_at = datetime.datetime.utcnow()
     await repository.save(session)
 
-    await publisher.publish_cancelled(session_id)
+    if task is not None and not task.done():
+        task.cancel()
+
     await publisher.publish(
         session_id,
         SSEEvent(
@@ -307,6 +230,7 @@ async def cancel_session(session_id: str) -> dict:
             data={"reason": "Cancelled by client."},
         ),
     )
+    await publisher.publish_cancelled(session_id)
 
     return {"id": session_id, "status": "cancelled"}
 

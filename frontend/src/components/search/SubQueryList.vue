@@ -6,7 +6,6 @@
 </template>
 <script setup lang="ts">
 import type { SubQuery } from '@/types'
-defineProps<{ data: unknown }>()
 const props = defineProps<{ data: unknown }>()
 const items = (Array.isArray(props.data) ? props.data : ((props.data as { subqueries?: SubQuery[] })?.subqueries || [])) as SubQuery[]
 function itemKey(item: SubQuery) {

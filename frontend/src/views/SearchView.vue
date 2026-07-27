@@ -11,6 +11,7 @@
             :is-searching="searchStore.isSearching"
             @search="handleSearch"
             @clear="handleClear"
+          />
           <el-button v-if="searchStore.isSearching" type="danger" plain @click="cancelSearch">取消搜索</el-button>
         </div>
       </div>

@@ -26,6 +26,37 @@ from paperqa.server.repository import JSONFileRepository
 
 logger = logging.getLogger(__name__)
 
+
+def _build_research_engine(
+    client: httpx.AsyncClient, *, providers: list[str] | None = None
+) -> Any:
+    """Instantiate a ResearchEngine.
+
+    Imports are deferred so that the server can start even when the
+    `paperqa.research` package (or its LLM/search deps) is missing in a
+    lightweight test environment. On failure we log and return ``None``
+    so the routes keep responding with their stub events.
+    """
+    try:
+        from paperqa.research import ResearchEngine
+        from paperqa.settings import Settings
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ResearchEngine unavailable; create_session will return 503: %s", exc
+        )
+        return None
+    try:
+        settings = Settings()
+        if providers is not None:
+            settings.research.providers = providers
+        return ResearchEngine(settings=settings, providers=client)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ResearchEngine init failed; create_session will return 503: %s", exc
+        )
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Lifespan state
 # ---------------------------------------------------------------------------
@@ -45,15 +76,27 @@ async def lifespan(app: FastAPI):
         # SSE event hub
         app.state.publisher = EventPublisher()  # type: ignore[attr-defined]
 
-        # Placeholder for the ResearchEngine (injected by downstream tasks;
-        # here we keep a reference so routes can access it)
-        app.state.engine = None  # type: ignore[attr-defined]
+        # Background tasks keyed by session_id (for cancellation)
+        app.state.tasks: dict[str, asyncio.Task[None]] = {}  # type: ignore[attr-defined]
 
-        logger.info("PaperQA server started — client, repository, and publisher ready.")
+        # Real ResearchEngine (lazily constructed; may be None in tests)
+        app.state.engine = _build_research_engine(client)  # type: ignore[attr-defined]
+
+        logger.info(
+            "PaperQA server started — engine=%s",
+            "ready" if app.state.engine is not None else "unavailable",
+        )
 
         yield
 
-        # Shutdown: cancel any in-flight engine tasks
+        # Shutdown: cancel any in-flight research tasks
+        tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
+        for sid, task in list(tasks.items()):
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
         engine = getattr(app.state, "engine", None)
         if engine is not None:
             try:
@@ -146,22 +189,29 @@ async def sse_events(session_id: str) -> StreamingResponse:
     Client disconnect automatically unsubscribes and unblocks the generator.
     """
     from paperqa.server.repository import JSONFileRepository
-    from paperqa.server.routes.sessions import _phony_sse_stream
 
     repository: JSONFileRepository = app.state.repository  # type: ignore[attr-defined]
+    publisher: EventPublisher = app.state.publisher  # type: ignore[attr-defined]
     session = await repository.get(session_id)
     if session is None:
         return StreamingResponse(
             iter([
-                SSEEvent(event=EventType.ERROR, data={"message": f"Session {session_id!r} not found."}).to_sse_line().encode("utf-8"),
+                SSEEvent(
+                    event=EventType.ERROR,
+                    data={"message": f"Session {session_id!r} not found."},
+                ).to_sse_line().encode("utf-8"),
                 SSEEvent(event=EventType.DONE, data={}).to_sse_line().encode("utf-8"),
             ]),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    async def event_stream() -> SSEEventGenerator:
+        async for event in publisher.events(session_id):
+            yield event.to_sse_line().encode("utf-8")
+
     return StreamingResponse(
-        _phony_sse_stream(session.query),
+        event_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
