@@ -1,11 +1,13 @@
 """Usage aggregation routes."""
 
+
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from paperqa.server.dependencies import get_repository
 from paperqa.server.schemas import UsageStats
 
 logger = logging.getLogger(__name__)
@@ -20,7 +22,9 @@ _user_usage: UsageStats = UsageStats()
     response_model=UsageStats,
     summary="Get aggregated usage statistics",
 )
-async def get_usage() -> UsageStats:
+async def get_usage(
+    repository=Depends(get_repository),
+) -> UsageStats:
     """Return aggregated usage statistics across all sessions for the current user.
 
     Usage is accumulated in memory for the lifetime of the server process.
@@ -28,9 +32,6 @@ async def get_usage() -> UsageStats:
     global _user_usage
 
     # Recompute from all persisted sessions
-    from paperqa.server.app import app
-
-    repository = app.state.repository
     sessions = await repository.list_(limit=1000)
 
     total = UsageStats()

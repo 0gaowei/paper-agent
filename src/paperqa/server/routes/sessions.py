@@ -1,5 +1,6 @@
 """Session management routes."""
 
+
 from __future__ import annotations
 
 import asyncio
@@ -7,8 +8,9 @@ import datetime
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from paperqa.server.dependencies import get_engine, get_publisher, get_repository, get_tasks
 from paperqa.server.events import EventPublisher, EventType, SSEEvent
 from paperqa.server.repository import JSONFileRepository
 from paperqa.server.schemas import (
@@ -16,6 +18,7 @@ from paperqa.server.schemas import (
     ResearchSession,
     SessionResponse,
 )
+from paperqa.server.sse_callback import SSEProgressCallback
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sessions"])
@@ -27,7 +30,12 @@ router = APIRouter(tags=["sessions"])
 
 
 async def _run_research_engine(
-    session_id: str, query: str, publisher: EventPublisher
+    session_id: str,
+    query: str,
+    repository: JSONFileRepository,
+    engine,
+    tasks: dict[str, asyncio.Task[None]],
+    progress_callback,  # SSEProgressCallback
 ) -> None:
     """Run the real ResearchEngine in the background and publish SSE events.
 
@@ -35,33 +43,23 @@ async def _run_research_engine(
     `asyncio.create_task(...)`. On CancelledError we emit CANCELLED and
     update the persisted session. On any other exception we emit ERROR.
     """
-    from paperqa.server.app import app
     from paperqa.server.bridge import (
         ResearchEventBridge,
         research_to_server_session,
     )
     from paperqa.research.query_understanding import analyze_and_expand_query
 
-    engine = getattr(app.state, "engine", None)
-    repository: JSONFileRepository = app.state.repository
-
     try:
         if engine is None:
-            await publisher.publish(
-                session_id,
-                SSEEvent(
-                    event=EventType.ERROR,
-                    data={"error": "ResearchEngine is not configured on this server."},
-                ),
+            await progress_callback.on_error(
+                session_id, "ResearchEngine is not configured on this server."
             )
-            await publisher.publish(
-                session_id, SSEEvent(event=EventType.DONE, data={})
-            )
+            await progress_callback.on_done(session_id)
             session = await repository.get(session_id)
             if session is not None:
                 session.status = "error"
                 session.error_message = "engine_unavailable"
-                session.updated_at = datetime.datetime.utcnow()
+                session.updated_at = datetime.datetime.now(datetime.timezone.utc)
                 await repository.save(session)
             return
 
@@ -70,24 +68,17 @@ async def _run_research_engine(
             query, engine.settings, tracked_llm
         )
         if precomputed_understanding.fallback_used:
-            await publisher.publish(
+            await progress_callback.on_heuristic_warning(
                 session_id,
-                SSEEvent(
-                    event=EventType.HEURISTIC_WARNING,
-                    data={
-                        "message": (
-                            "No LLM available for query understanding. "
-                            "Using heuristic fallback with limited understanding."
-                        ),
-                        "error": precomputed_understanding.error_message,
-                    },
-                ),
+                "No LLM available for query understanding. "
+                "Using heuristic fallback with limited understanding.",
+                precomputed_understanding.error_message,
             )
 
         research_session = await engine.arun(
             query,
             precomputed_understanding=precomputed_understanding,
-            publisher=publisher,
+            progress_callback=progress_callback,
             session_id=session_id,
         )
         server_session = research_to_server_session(research_session, session_id)
@@ -95,46 +86,32 @@ async def _run_research_engine(
 
         bridge = ResearchEventBridge(session_id, research_session)
         for payload in bridge.build_events():
-            await publisher.publish(
+            await progress_callback.publish_raw(
                 session_id,
-                SSEEvent(event=payload["type"], data=payload["data"]),
+                payload["type"],
+                payload["data"],
             )
     except asyncio.CancelledError:
-        await publisher.publish(
-            session_id,
-            SSEEvent(
-                event=EventType.CANCELLED,
-                data={"reason": "Cancelled by client."},
-            ),
-        )
+        await progress_callback.on_cancelled(session_id, "Cancelled by client.")
         session = await repository.get(session_id)
         if session is not None:
             session.status = "cancelled"
             session.stop_reason = "cancelled"
-            session.updated_at = datetime.datetime.utcnow()
+            session.updated_at = datetime.datetime.now(datetime.timezone.utc)
             await repository.save(session)
         raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("ResearchEngine run failed for %s", session_id)
         error_msg = f"ResearchEngine failure: {exc!s}"
-        await publisher.publish(
-            session_id,
-            SSEEvent(
-                event=EventType.ERROR,
-                data={"error": error_msg},
-            ),
-        )
-        await publisher.publish(
-            session_id, SSEEvent(event=EventType.DONE, data={})
-        )
+        await progress_callback.on_error(session_id, error_msg)
+        await progress_callback.on_done(session_id)
         session = await repository.get(session_id)
         if session is not None:
             session.status = "error"
             session.error_message = str(exc)
-            session.updated_at = datetime.datetime.utcnow()
+            session.updated_at = datetime.datetime.now(datetime.timezone.utc)
             await repository.save(session)
     finally:
-        tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
         tasks.pop(session_id, None)
 
 
@@ -149,18 +126,20 @@ async def _run_research_engine(
     response_model=dict,
     summary="Create a new research session",
 )
-async def create_session(request: NewSessionRequest) -> dict:
+async def create_session(
+    request: NewSessionRequest,
+    repository: JSONFileRepository = Depends(get_repository),
+    publisher: EventPublisher = Depends(get_publisher),
+    engine=Depends(get_engine),
+    tasks: dict = Depends(get_tasks),
+) -> dict:
     """Create a new research session and immediately return 202 Accepted.
 
     The session is launched in the background via an `asyncio.Task`.
     Subscribe to GET /api/sessions/{id}/events for real-time progress
     via SSE. Returns 503 when the ResearchEngine is unavailable.
     """
-    from paperqa.server.app import app
-
     session_id = str(uuid4())
-    repository: JSONFileRepository = app.state.repository
-    publisher: EventPublisher = app.state.publisher
 
     session = ResearchSession(
         id=session_id,
@@ -169,7 +148,6 @@ async def create_session(request: NewSessionRequest) -> dict:
     )
     await repository.save(session)
 
-    engine = getattr(app.state, "engine", None)
     if engine is None:
         session.status = "error"
         session.error_message = "engine_unavailable"
@@ -179,11 +157,15 @@ async def create_session(request: NewSessionRequest) -> dict:
             detail="ResearchEngine is not configured on this server.",
         )
 
+    # Create SSE progress callback for this session
+    progress_callback = SSEProgressCallback(publisher, session_id)
+
     task = asyncio.create_task(
-        _run_research_engine(session_id, request.query, publisher),
+        _run_research_engine(
+            session_id, request.query, repository, engine, tasks, progress_callback
+        ),
         name=f"research-{session_id}",
     )
-    tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
     tasks[session_id] = task
 
     return {"id": session_id}
@@ -194,14 +176,14 @@ async def create_session(request: NewSessionRequest) -> dict:
     response_model=SessionResponse,
     summary="Get a research session",
 )
-async def get_session(session_id: str) -> SessionResponse:
+async def get_session(
+    session_id: str,
+    repository: JSONFileRepository = Depends(get_repository),
+) -> SessionResponse:
     """Return the full session JSON for a given session ID.
 
     Use this to refresh the session state after a client reconnects.
     """
-    from paperqa.server.app import app
-
-    repository: JSONFileRepository = app.state.repository
     session = await repository.get(session_id)
     if session is None:
         raise HTTPException(
@@ -220,17 +202,17 @@ async def get_session(session_id: str) -> SessionResponse:
     status_code=status.HTTP_200_OK,
     summary="Cancel a running research session",
 )
-async def cancel_session(session_id: str) -> dict:
+async def cancel_session(
+    session_id: str,
+    repository: JSONFileRepository = Depends(get_repository),
+    publisher: EventPublisher = Depends(get_publisher),
+    tasks: dict = Depends(get_tasks),
+) -> dict:
     """Cancel a running research session.
 
     This sends a cancellation signal to the running task and emits
     an error event to all SSE subscribers.
     """
-    from paperqa.server.app import app
-
-    repository: JSONFileRepository = app.state.repository
-    publisher: EventPublisher = app.state.publisher
-
     session = await repository.get(session_id)
     if session is None:
         raise HTTPException(
@@ -238,12 +220,11 @@ async def cancel_session(session_id: str) -> dict:
             detail=f"Session {session_id!r} not found.",
         )
 
-    tasks: dict[str, asyncio.Task[None]] = getattr(app.state, "tasks", {})
     task = tasks.get(session_id)
 
     session.status = "cancelled"
     session.stop_reason = "cancelled"
-    session.updated_at = datetime.datetime.utcnow()
+    session.updated_at = datetime.datetime.now(datetime.timezone.utc)
     await repository.save(session)
 
     if task is not None and not task.done():
@@ -265,6 +246,9 @@ async def cancel_session(session_id: str) -> dict:
     "/sessions/{session_id}/history",
     summary="Get session history (alias for get_session)",
 )
-async def get_session_history(session_id: str) -> SessionResponse:
+async def get_session_history(
+    session_id: str,
+    repository: JSONFileRepository = Depends(get_repository),
+) -> SessionResponse:
     """Alias for GET /sessions/{session_id} for backwards compatibility."""
-    return await get_session(session_id)
+    return await get_session(session_id, repository)

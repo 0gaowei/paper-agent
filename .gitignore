@@ -322,10 +322,5 @@ frontend/dist/
 
 # Private docs (赛题文档、项目设计稿等，不入库)
 private-docs/
-.qoder/HANDOFF-2026-07-27-17-frontend-sse-error-fix.md
-.qoder/HANDOFF-2026-07-27-api-key-base-url-fix.md
-.qoder/skills/handoff-doc/SKILL.md
-.qoder/skills/karpathy-guidelines/SKILL.md
-.qoder/skills/paper-search-commit-helper/SKILL.md
-.qoder/skills/session-start/SKILL.md
+.qoder/
 log/

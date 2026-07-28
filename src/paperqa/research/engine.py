@@ -16,6 +16,7 @@ from lmi import LLMResult, embedding_model_factory
 from ..clients.academic_search import AcademicSearchClient, AcademicSearchProvider
 from ..docs import Docs
 from ..types import DocDetails, PQASession, Text
+from .callbacks import NoOpProgressCallback, ResearchProgressCallback
 from .models import (
     AcademicPaper,
     AnswerSummary,
@@ -32,7 +33,7 @@ from .query_understanding import analyze_and_expand_query
 from .ranking import ascore_papers, rank_with_mmr, score_papers
 
 if TYPE_CHECKING:
-    from paperqa.server.events import EventPublisher, SSEEvent
+    pass
 
 _T = TypeVar("_T")
 
@@ -381,7 +382,7 @@ class ResearchEngine:
     async def _build_evidence_and_answer(
         self,
         session: ResearchSession,
-        publisher: "EventPublisher | None" = None,
+        progress_callback: ResearchProgressCallback | None = None,
         session_id: str | None = None,
     ) -> None:
         papers = [paper for paper in session.final_papers if paper.abstract]
@@ -416,22 +417,12 @@ class ResearchEngine:
             )
             for context in pqa_session.contexts
         ]
-        if publisher and session_id:
-            from paperqa.server.events import EventType, SSEEvent
-
-            await publisher.publish(
-                session_id,
-                SSEEvent(
-                    event=EventType.EVIDENCE_EXTRACTION_DONE,
-                    data={"snippets_found": len(session.evidence)},
-                ),
+        if progress_callback:
+            await progress_callback.on_evidence_extraction_done(
+                session_id, len(session.evidence)
             )
-            await publisher.publish(
-                session_id,
-                SSEEvent(
-                    event=EventType.ANSWER_SYNTHESIS_START,
-                    data={"message": "Synthesizing answer from evidence..."},
-                ),
+            await progress_callback.on_answer_synthesis_start(
+                session_id, "Synthesizing answer from evidence..."
             )
         answered = await adapter.aquery(
             pqa_session,
@@ -460,13 +451,9 @@ class ResearchEngine:
             raw_answer=answered.raw_answer,
             has_successful_answer=answered.has_successful_answer,
         )
-        if publisher and session_id:
-            await publisher.publish(
-                session_id,
-                SSEEvent(
-                    event=EventType.ANSWER_SYNTHESIS_DONE,
-                    data={"answer_length": len(session.answer.answer) if session.answer else 0},
-                ),
+        if progress_callback:
+            await progress_callback.on_answer_synthesis_done(
+                session_id, len(session.answer.answer) if session.answer else 0
             )
 
     async def arun(
@@ -475,7 +462,7 @@ class ResearchEngine:
         *,
         max_high_relevant: int | None = None,
         precomputed_understanding: Any | None = None,
-        publisher: "EventPublisher | None" = None,
+        progress_callback: ResearchProgressCallback | None = None,
         session_id: str | None = None,
     ) -> ResearchSession:
         """Execute the complete research loop for one query."""
@@ -657,17 +644,9 @@ class ResearchEngine:
 
             if session.final_papers and session.stop_reason != StopReason.BUDGET_EXCEEDED:
                 try:
-                    if publisher and session_id:
-                        from paperqa.server.events import EventType, SSEEvent
-
-                        await publisher.publish(
-                            session_id,
-                            SSEEvent(
-                                event=EventType.EVIDENCE_EXTRACTION_START,
-                                data={"message": "Starting evidence extraction from papers..."},
-                            ),
-                        )
-                    await self._build_evidence_and_answer(session, publisher, session_id)
+                    if progress_callback:
+                        await progress_callback.on_evidence_extraction_start(session_id)
+                    await self._build_evidence_and_answer(session, progress_callback, session_id)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:  # Evidence/answer stage failure → fallback to abstracts
@@ -698,19 +677,10 @@ class ResearchEngine:
                         ],
                         has_successful_answer=False,
                     )
-                    if publisher and session_id:
-                        await publisher.publish(
+                    if progress_callback:
+                        await progress_callback.on_answer_synthesis_done(
                             session_id,
-                            SSEEvent(
-                                event=EventType.ANSWER_SYNTHESIS_DONE,
-                                data={
-                                    "answer_length": (
-                                        len(session.answer.answer)
-                                        if session.answer
-                                        else 0
-                                    )
-                                },
-                            ),
+                            len(session.answer.answer) if session.answer else 0
                         )
         except asyncio.CancelledError:
             raise

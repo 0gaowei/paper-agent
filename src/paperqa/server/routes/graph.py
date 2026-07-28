@@ -1,11 +1,13 @@
 """Graph routes for session search tree and citation expansion visualization."""
 
+
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from paperqa.server.dependencies import get_repository
 from paperqa.server.schemas import RelevanceTier
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,10 @@ router = APIRouter(prefix="/sessions", tags=["graph"])
     response_model=dict,
     summary="Get session search tree graph",
 )
-async def get_session_graph(session_id: str) -> dict:
+async def get_session_graph(
+    session_id: str,
+    repository=Depends(get_repository),
+) -> dict:
     """Return the search tree graph for a session.
 
     The graph shows:
@@ -26,9 +31,6 @@ async def get_session_graph(session_id: str) -> dict:
     - Paper nodes discovered at each round
     - Citation expansion edges
     """
-    from paperqa.server.app import app
-
-    repository = app.state.repository
     session = await repository.get(session_id)
     if session is None:
         raise HTTPException(

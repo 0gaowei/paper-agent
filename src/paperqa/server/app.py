@@ -64,27 +64,6 @@ def _build_research_engine(
         return None
 
 
-def update_engine_llm_config() -> None:
-    """Update the engine's LLM configuration with latest API credentials.
-    
-    Call this after settings are updated to ensure the engine uses the new config.
-    """
-    from paperqa.server.routes.settings import get_llm_credentials
-
-    # Access the running app's engine via the module-level app instance
-    from paperqa.server.app import app
-    engine = getattr(app.state, "engine", None)
-    if engine is not None and hasattr(engine, "settings"):
-        llm_api_key, llm_base_url = get_llm_credentials()
-        if llm_api_key:
-            engine.settings.llm_api_key = llm_api_key
-        if llm_base_url:
-            engine.settings.llm_base_url = llm_base_url
-        # Reinitialize the LLM model with new credentials
-        engine.llm_model = engine.settings.get_llm()
-        logger.info("Engine LLM config updated with latest API credentials")
-
-
 # ---------------------------------------------------------------------------
 # Lifespan state
 # ---------------------------------------------------------------------------
@@ -202,19 +181,19 @@ app.include_router(usage.router, prefix="/api")
     response_class=StreamingResponse,
 )
 async def sse_events(session_id: str) -> StreamingResponse:
-    """Stream Server-Sent Events for a research session.
+    """流式服务器发送事件（Server-Sent Events），用于研究会话。
 
-    Clients should:
-    1. First call POST /api/sessions to create (or GET /api/sessions/{id} to resume)
-    2. Subscribe here for real-time updates
-    3. Parse SSE lines: `event: <type>\\ndata: <json>\\n\\n`
+    客户端应当：
+    1. 首先调用 POST /api/sessions 创建会话（或 GET /api/sessions/{id} 恢复会话）
+    2. 订阅此接口以获取实时更新
+    3. 解析 SSE 行格式：`event: <type>\\ndata: <json>\\n\\n`
 
-    Event types:
+    事件类型：
       understanding → subqueries → round_started → paper_found (×N)
         → partial_documents → answer → usage → done
-      error / cancelled may appear at any point.
+      error / cancelled 可能在任意时刻出现。
 
-    Client disconnect automatically unsubscribes and unblocks the generator.
+    客户端断开连接时，会自动取消订阅并解除生成器的阻塞。
     """
     from paperqa.server.repository import JSONFileRepository
 
@@ -262,7 +241,7 @@ def run(
 ) -> None:
     """Run the server programmatically with uvicorn."""
     uvicorn.run(
-        "paperqa.server.app:app",
+        app="paperqa.server.app:app",
         host=host,
         port=port,
         reload=reload,
@@ -270,10 +249,31 @@ def run(
     )
 
 
+def _configure_file_logging(log_dir: str | None = None) -> None:
+    """Configure file logging for the application."""
+    if log_dir is None:
+        log_dir = os.environ.get("PQA_LOG_DIR", "log")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "pqa-serve.log")
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+
+
 def serve() -> None:
     """CLI entry point: `pqa-serve`."""
     import sys
 
+    log_level = os.environ.get("PQA_LOG_LEVEL", "info")
+    log_dir = os.environ.get("PQA_LOG_DIR", "log")
+    _configure_file_logging(log_dir)
+
+    # 获取环境变量中的主机和端口
     host = os.environ.get("PQA_HOST", "0.0.0.0")
     port_str = os.environ.get("PQA_PORT", "8000")
     try:
@@ -282,7 +282,6 @@ def serve() -> None:
         sys.stderr.write(f"[pqa-serve] PQA_PORT must be an integer, got {port_str!r}. Using 8000.\n")
         port = 8000
 
-    log_level = os.environ.get("PQA_LOG_LEVEL", "info")
     reload = os.environ.get("PQA_RELOAD", "0") in ("1", "true", "yes")
 
     logger.info("Starting pqa-serve on %s:%s (reload=%s)", host, port, reload)

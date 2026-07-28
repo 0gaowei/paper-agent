@@ -1,11 +1,13 @@
 """Paper detail and graph routes."""
 
+
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from paperqa.server.dependencies import get_repository
 from paperqa.server.schemas import AcademicPaper, PaperSource, RelevanceTier
 
 logger = logging.getLogger(__name__)
@@ -26,7 +28,10 @@ def register_paper(paper: AcademicPaper) -> None:
     response_model=AcademicPaper,
     summary="Get paper details",
 )
-async def get_paper(paper_id: str) -> AcademicPaper:
+async def get_paper(
+    paper_id: str,
+    repository=Depends(get_repository),
+) -> AcademicPaper:
     """Return details for a paper, looking it up in the session cache.
 
     If the paper is not in the cache, returns a 404.
@@ -35,9 +40,6 @@ async def get_paper(paper_id: str) -> AcademicPaper:
         return _paper_cache[paper_id]
 
     # Fallback: try to construct a minimal response from stored sessions
-    from paperqa.server.app import app
-
-    repository = app.state.repository
     sessions = await repository.list_(limit=100)
     for session in sessions:
         if paper_id in session.papers:
@@ -54,16 +56,15 @@ async def get_paper(paper_id: str) -> AcademicPaper:
     response_model=dict,
     summary="Get paper citation graph",
 )
-async def get_paper_graph(paper_id: str) -> dict:
+async def get_paper_graph(
+    paper_id: str,
+    repository=Depends(get_repository),
+) -> dict:
     """Return the citation graph for a specific paper.
 
     The graph includes the paper itself and its references/citations
     that were discovered during the session.
     """
-    from paperqa.server.app import app
-
-    repository = app.state.repository
-
     paper = None
     if paper_id in _paper_cache:
         paper = _paper_cache[paper_id]

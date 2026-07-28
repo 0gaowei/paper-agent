@@ -1,11 +1,12 @@
 """Settings routes for reading/updating researcher configuration."""
 
+
 from __future__ import annotations
 
 import logging
 import os
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Request
 
 from paperqa.server.schemas import SettingsPayload
 
@@ -76,7 +77,10 @@ async def get_settings() -> SettingsPayload:
     response_model=SettingsPayload,
     summary="Update researcher settings",
 )
-async def update_settings(payload: SettingsPayload) -> SettingsPayload:
+async def update_settings(
+    payload: SettingsPayload,
+    request: Request,
+) -> SettingsPayload:
     """Update researcher settings including API key and base URL.
 
     This endpoint accepts API keys in the payload but stores them server-side
@@ -121,22 +125,25 @@ async def update_settings(payload: SettingsPayload) -> SettingsPayload:
 
     # Update the engine's LLM configuration if API credentials changed
     if payload.llm_api_key is not None or payload.llm_base_url is not None:
-        _update_engine_config()
+        _update_engine_config(request.app)
 
     # Re-read current state for response
     return await get_settings()
 
 
-def _update_engine_config() -> None:
+def _update_engine_config(app) -> None:
     """Update the engine's LLM config with latest API credentials.
     
-    Uses lazy import to avoid circular dependency.
+    Args:
+        app: The FastAPI app instance with engine in state.
     """
-    try:
-        from paperqa.server.app import update_engine_llm_config
-        update_engine_llm_config()
-    except ImportError:
-        pass  # App not fully initialized yet
+    engine = getattr(app.state, "engine", None)
+    if engine is not None and hasattr(engine, "settings"):
+        engine.settings.llm_api_key = _llm_api_key
+        engine.settings.llm_base_url = _llm_base_url
+        # Reinitialize the LLM model with new credentials
+        engine.llm_model = engine.settings.get_llm()
+        logger.info("Engine LLM config updated with latest API credentials")
 
 
 def get_llm_credentials() -> tuple[str | None, str | None]:
