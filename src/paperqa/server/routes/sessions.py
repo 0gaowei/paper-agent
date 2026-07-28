@@ -68,11 +68,33 @@ async def _run_research_engine(
             query, engine.settings, tracked_llm
         )
         if precomputed_understanding.fallback_used:
+            error_msg = precomputed_understanding.error_message or ""
+            # Check if fallback was caused by an API error (e.g., quota exceeded)
+            # vs. just missing LLM configuration (which is acceptable for fallback)
+            is_api_error = any(
+                keyword in error_msg.lower()
+                for keyword in ("quota", "insufficient", "额度", "error", "failed", "denied", "api")
+            )
+            if is_api_error:
+                # API error - send ERROR event immediately and terminate
+                await progress_callback.on_error(
+                    session_id,
+                    f"LLM API Error: {error_msg}",
+                )
+                await progress_callback.on_done(session_id)
+                session = await repository.get(session_id)
+                if session is not None:
+                    session.status = "error"
+                    session.error_message = error_msg
+                    session.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                    await repository.save(session)
+                return
+            # Missing LLM config - use heuristic fallback, continue with warning
             await progress_callback.on_heuristic_warning(
                 session_id,
                 "No LLM available for query understanding. "
                 "Using heuristic fallback with limited understanding.",
-                precomputed_understanding.error_message,
+                error_msg,
             )
 
         research_session = await engine.arun(
