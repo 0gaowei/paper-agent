@@ -170,14 +170,6 @@ class QueryUnderstanding(BaseModel):
         default="general",
         description="Overall search strategy (e.g., 'survey', 'domain', 'general').",
     )
-    fallback_used: bool = Field(
-        default=False,
-        description="Whether heuristic fallback was used instead of LLM analysis.",
-    )
-    error_message: str | None = Field(
-        default=None,
-        description="Error message if LLM analysis failed.",
-    )
 
 
 class CitationEdge(BaseModel):

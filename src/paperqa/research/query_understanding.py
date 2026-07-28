@@ -7,57 +7,8 @@ from typing import Any
 
 from aviary.core import Message
 
-from .models import Domain, QueryIntent, QueryUnderstanding, SubQuery
+from .models import Domain, QueryIntent, QueryUnderstanding
 from .prompts import QUERY_UNDERSTANDING_PROMPT, QUERY_UNDERSTANDING_SYSTEM
-
-_DOMAIN_KEYWORDS: dict[Domain, tuple[str, ...]] = {
-    Domain.NLP: (
-        "nlp",
-        "language model",
-        "llm",
-        "transformer",
-        "text generation",
-        "自然语言",
-        "语言模型",
-    ),
-    Domain.ML: (
-        "machine learning",
-        "deep learning",
-        "neural network",
-        "reinforcement learning",
-        "机器学习",
-        "深度学习",
-    ),
-    Domain.CV: (
-        "computer vision",
-        "image recognition",
-        "object detection",
-        "视觉",
-        "图像",
-    ),
-    Domain.MED: (
-        "medicine",
-        "medical",
-        "clinical",
-        "patient",
-        "医学",
-        "临床",
-    ),
-    Domain.BIO: ("biology", "genomics", "protein", "cell", "生物", "基因"),
-    Domain.PHYSICS: ("physics", "quantum", "物理", "量子"),
-    Domain.CHEMISTRY: ("chemistry", "molecule", "chemical", "化学", "分子"),
-    Domain.ECONOMICS: ("economics", "economic", "market", "经济", "市场"),
-    Domain.PSYCHOLOGY: ("psychology", "cognitive", "心理", "认知"),
-    Domain.SOCIAL: ("social science", "sociology", "社会科学", "社会学"),
-    Domain.CS_AI: (
-        "artificial intelligence",
-        "computer science",
-        "algorithm",
-        "人工智能",
-        "计算机",
-        "算法",
-    ),
-}
 
 _DOMAIN_ALIASES = {
     "ai": Domain.CS_AI,
@@ -158,8 +109,6 @@ def _normalize_payload(query: str, payload: dict[str, Any]) -> dict[str, Any]:
         "intent": intent,
         "domains": domains,
         "subqueries": normalized_subqueries,
-        "fallback_used": False,
-        "error_message": None,
     }
 
 
@@ -179,7 +128,13 @@ async def _call_llm(llm_model: Any, messages: list[dict[str, str]]) -> Any:
 async def analyze_and_expand_query(
     query: str, settings: Any, llm_model: Any
 ) -> QueryUnderstanding:
-    """Analyze a query with the configured LLM, falling back to local heuristics."""
+    """Analyze a query with the configured LLM and return a structured understanding.
+
+    Raises:
+        ValueError: If the query is empty.
+        Exception: Propagated from the LLM call or JSON parsing if the LLM
+            response cannot be parsed into a ``QueryUnderstanding``.
+    """
     query = query.strip()
     if not query:
         raise ValueError("query must not be empty")
@@ -191,84 +146,7 @@ async def analyze_and_expand_query(
             "content": QUERY_UNDERSTANDING_PROMPT.format(query=query),
         },
     ]
-    try:
-        response = await _call_llm(llm_model, messages)
-        return QueryUnderstanding.model_validate(
-            _normalize_payload(query, _extract_json(_extract_text(response)))
-        )
-    except Exception as exc:  # The research loop must remain available without an LLM.
-        return _heuristic_understanding(query, settings, error_message=str(exc))
-
-
-def _heuristic_understanding(
-    query: str, settings: Any, error_message: str | None = None
-) -> QueryUnderstanding:
-    """Infer a conservative intent/domain decomposition using local keywords."""
-    lowered = query.casefold()
-    if any(term in lowered for term in ("compare", "versus", " vs ", "comparison", "对比", "比较")):
-        intent = QueryIntent.COMPARATIVE
-    elif any(term in lowered for term in ("latest", "recent", "current", "state of the art", "最新", "近期", "现状")):
-        intent = QueryIntent.CURRENT_STATE
-    elif any(term in lowered for term in ("survey", "review", "overview", "综述", "概览")):
-        intent = QueryIntent.SURVEY
-    elif any(term in lowered for term in ("history", "foundational", "background", "基础", "历史")):
-        intent = QueryIntent.BACKGROUND
-    elif any(term in lowered for term in ("how", "why", "what", "which", "如何", "为什么", "什么")):
-        intent = QueryIntent.SPECIFIC
-    else:
-        intent = QueryIntent.GENERAL
-
-    domains = [
-        domain
-        for domain, keywords in _DOMAIN_KEYWORDS.items()
-        if any(keyword in lowered for keyword in keywords)
-    ]
-    domains = list(dict.fromkeys(domains)) or [Domain.UNKNOWN]
-
-    research_settings = getattr(settings, "research", settings)
-    providers = list(
-        getattr(research_settings, "providers", ["semantic_scholar", "openalex"])
-    )
-    subqueries = [
-        SubQuery(
-            query=query,
-            purpose="Search the original research question",
-            priority=10,
-            parent_intent=intent,
-            domain=domains[0],
-        )
-    ]
-    if intent in {QueryIntent.SURVEY, QueryIntent.CURRENT_STATE}:
-        subqueries.append(
-            SubQuery(
-                query=f"{query} recent advances review",
-                purpose="Cover recent work and synthesis papers",
-                priority=7,
-                parent_intent=intent,
-                domain=domains[0],
-            )
-        )
-    elif intent == QueryIntent.BACKGROUND:
-        subqueries.append(
-            SubQuery(
-                query=f"{query} foundational papers",
-                purpose="Find foundational literature",
-                priority=7,
-                parent_intent=intent,
-                domain=domains[0],
-            )
-        )
-
-    strategy = "survey" if intent in {QueryIntent.SURVEY, QueryIntent.CURRENT_STATE} else (
-        "domain" if domains != [Domain.UNKNOWN] else "general"
-    )
-    return QueryUnderstanding(
-        original_query=query,
-        intent=intent,
-        domains=domains,
-        suitable_sources=providers,
-        subqueries=subqueries,
-        search_strategy=strategy,
-        fallback_used=True,
-        error_message=error_message,
+    response = await _call_llm(llm_model, messages)
+    return QueryUnderstanding.model_validate(
+        _normalize_payload(query, _extract_json(_extract_text(response)))
     )

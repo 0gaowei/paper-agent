@@ -77,6 +77,31 @@ def client_with_repo(client: TestClient, temp_sessions_dir: Path) -> TestClient:
     return client
 
 
+class _StubQueryLLM:
+    """Minimal LLM stub that returns a valid query-understanding JSON payload.
+
+    Used by ``_StubResearchEngine`` so the server-side
+    ``analyze_and_expand_query`` call can succeed without a real LLM.
+    """
+
+    async def acomplete(self, messages: list[Any]) -> dict[str, Any]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "intent": "general",
+                                "domains": [],
+                                "subqueries": [],
+                            }
+                        )
+                    }
+                }
+            ]
+        }
+
+
 class _StubResearchEngine:
     """Drop-in engine that emits deterministic events without touching the
     network, the LLM, or any search provider.
@@ -90,7 +115,12 @@ class _StubResearchEngine:
         self._results = results or []
         self.arun_calls: list[str] = []
         self.closed = False
-        self.llm_model = None
+        # The server route in `_run_research_engine` calls
+        # `analyze_and_expand_query(query, engine.settings, engine.llm_model)`
+        # BEFORE `engine.arun(...)`. Since query understanding no longer has
+        # a heuristic fallback, we must hand the stub a usable LLM that
+        # returns a valid JSON payload.
+        self.llm_model = _StubQueryLLM()
         self.settings = None
 
     async def arun(
@@ -101,6 +131,7 @@ class _StubResearchEngine:
         precomputed_understanding: Any | None = None,
         publisher: Any | None = None,
         session_id: str | None = None,
+        **_: Any,
     ) -> Any:
         from paperqa.research.models import (
             AnswerSummary,

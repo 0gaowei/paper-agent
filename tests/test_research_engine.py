@@ -17,12 +17,8 @@ from paperqa.research.models import (
     RelevanceTier,
     SearchResult,
     StopReason,
-    SubQuery,
 )
-from paperqa.research.query_understanding import (
-    _heuristic_understanding,
-    analyze_and_expand_query,
-)
+from paperqa.research.query_understanding import analyze_and_expand_query
 from paperqa.research.ranking import (
     _lexical_relevance,
     rank_with_mmr,
@@ -97,6 +93,19 @@ class FakeLLM:
 
     async def call_single(self, messages: Any, **_: Any) -> LLMResult:
         self.call_single_calls += 1
+        if self._raise_on_query:
+            raise RuntimeError("LLM provider died")
+        # First call drives query understanding (returns JSON), the rest answer
+        # synthesis. The engine wraps llm_model in _TrackedLLMAdapter which only
+        # exposes call_single, so the same FakeLLM must serve both stages here.
+        if self.call_single_calls == 1:
+            return LLMResult(
+                model="fake",
+                text=json_dumps(self.query_payload),
+                prompt_count=10,
+                completion_count=20,
+                cost=0.01,
+            )
         return LLMResult(
             model="fake",
             text=self.answer_payload,
@@ -188,42 +197,19 @@ async def test_query_understanding_parses_llm_json() -> None:
     assert understanding.domains == [Domain.ML]
     assert understanding.entities == ["machine learning"]
     assert understanding.subqueries[0].query == "machine learning survey"
-    assert understanding.fallback_used is False
 
 
 @pytest.mark.asyncio
-async def test_query_understanding_falls_back_to_heuristic() -> None:
+async def test_query_understanding_raises_on_llm_failure() -> None:
+    """LLM failure must surface as an exception; no heuristic fallback."""
     llm = FakeLLM(raise_on_query=True)
     settings = _build_settings()
-    understanding = await analyze_and_expand_query(
-        "Compare deep learning versus classical machine learning",
-        settings,
-        llm,
-    )
-    assert understanding.fallback_used is True
-    assert understanding.intent == QueryIntent.COMPARATIVE
-    assert Domain.ML in understanding.domains
-    assert understanding.subqueries, "heuristic should produce at least one subquery"
-
-
-@pytest.mark.asyncio
-async def test_query_understanding_heuristic_handles_survey_keyword() -> None:
-    """Survey-related keywords should bias the heuristic toward a survey intent."""
-
-    settings = _build_settings()
-    understanding = await analyze_and_expand_query(
-        "Survey of transformers", settings, FakeLLM(raise_on_query=True)
-    )
-    assert understanding.intent == QueryIntent.SURVEY
-    assert understanding.fallback_used is True
-
-
-def test_heuristic_understanding_reports_error_message() -> None:
-    understanding = _heuristic_understanding(
-        "Anything", _build_settings(), error_message="boom"
-    )
-    assert understanding.fallback_used is True
-    assert understanding.error_message == "boom"
+    with pytest.raises(RuntimeError, match="LLM provider died"):
+        await analyze_and_expand_query(
+            "Compare deep learning versus classical machine learning",
+            settings,
+            llm,
+        )
 
 
 def test_score_papers_assigns_tiers_and_factors() -> None:
@@ -543,6 +529,26 @@ async def test_research_engine_llm_failure_skips_answer_stage() -> None:
 
         async def call_single(self, messages: Any, **_: Any) -> LLMResult:
             self.calls.append("answer")
+            # The engine wraps the LLM in _TrackedLLMAdapter which only exposes
+            # call_single, so the first call here actually serves query
+            # understanding (must succeed with JSON); only subsequent calls
+            # drive answer synthesis and should fail.
+            if self.calls.count("answer") == 1:
+                return LLMResult(
+                    model="fake",
+                    text=json_dumps(
+                        {
+                            "intent": "survey",
+                            "domains": ["ml"],
+                            "subqueries": [
+                                {"query": "deep learning", "priority": 10}
+                            ],
+                        }
+                    ),
+                    prompt_count=10,
+                    completion_count=20,
+                    cost=0.01,
+                )
             raise RuntimeError("answer failed")
 
     provider = FakeProvider(papers=papers)
@@ -666,27 +672,6 @@ async def test_research_engine_cancellation_is_propagated() -> None:
 
 
 @pytest.mark.asyncio
-async def test_research_engine_handles_heuristic_fallback() -> None:
-    """When the LLM raises, the heuristic produces a working understanding."""
-
-    provider = FakeProvider(
-        papers=[_make_paper("p1", "Machine learning", "Machine learning review.")]
-    )
-    llm = FakeLLM(raise_on_query=True)
-    settings = _build_settings(max_rounds=1)
-    engine = ResearchEngine(
-        settings=settings,
-        llm_model=llm,
-        embedding_model=None,
-        providers=provider,
-    )
-    session = await engine.arun("machine learning survey")
-    assert session.query_understanding is not None
-    assert session.query_understanding.fallback_used is True
-    assert session.query_understanding.subqueries
-
-
-@pytest.mark.asyncio
 async def test_research_engine_deduplicates_papers_in_search() -> None:
     """Engine aggregates references and exposes the deduplicated paper set."""
 
@@ -774,9 +759,3 @@ async def test_research_engine_with_explicit_provider_skips_http_creation() -> N
     )
     assert engine._http_client is None
     assert engine._owns_http_client is False
-
-
-def test_heuristic_understanding_returns_valid_subquery_objects() -> None:
-    understanding = _heuristic_understanding("quantum computing", _build_settings())
-    assert all(isinstance(sq, SubQuery) for sq in understanding.subqueries)
-    assert understanding.suitable_sources

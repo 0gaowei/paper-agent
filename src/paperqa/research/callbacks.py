@@ -61,12 +61,6 @@ class ResearchProgressCallback(Protocol):
         """Called when the research session is cancelled."""
         ...
 
-    async def on_heuristic_warning(
-        self, session_id: str | None, message: str, error: str | None
-    ) -> None:
-        """Called when heuristic fallback is used instead of LLM."""
-        ...
-
     async def publish_raw(
         self, session_id: str | None, event_type: "EventType", data: dict[str, Any]
     ) -> None:
@@ -105,11 +99,6 @@ class NoOpProgressCallback:
         pass
 
     async def on_cancelled(self, session_id: str | None, reason: str) -> None:
-        pass
-
-    async def on_heuristic_warning(
-        self, session_id: str | None, message: str, error: str | None
-    ) -> None:
         pass
 
     async def publish_raw(

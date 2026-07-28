@@ -107,19 +107,6 @@ class SSEProgressCallback:
             ),
         )
 
-    async def on_heuristic_warning(
-        self, session_id: str | None, message: str, error: str | None
-    ) -> None:
-        from paperqa.server.events import EventType, SSEEvent
-
-        await self.publisher.publish(
-            self.session_id,
-            SSEEvent(
-                event=EventType.HEURISTIC_WARNING,
-                data={"message": message, "error": error},
-            ),
-        )
-
     async def publish_raw(
         self, session_id: str | None, event_type: "EventType", data: dict[str, Any]
     ) -> None:
