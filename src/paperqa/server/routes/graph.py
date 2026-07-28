@@ -90,20 +90,23 @@ async def get_session_graph(
             "is_root": False,
         })
         node_ids.add(paper_id)
-        # Edge: subquery -> paper (best effort, attach to last matching round)
-        matching_sq = next(
-            (sq for sq in reversed(session.subqueries) if sq.round == paper.relevance_tier),
-            None,
-        )
-        if matching_sq:
-            sq_node = f"subquery:{matching_sq.text[:40]}:r{matching_sq.round}"
-            if sq_node in node_ids:
-                edges.append({
-                    "source": sq_node,
-                    "target": paper_id,
-                    "type": "found",
-                    "round": matching_sq.round,
-                })
+        # Edge: subquery -> paper (best effort, attach to matching round)
+        # Use paper.round (0-indexed) to find matching subquery
+        paper_round = getattr(paper, 'round', None)
+        if paper_round is not None:
+            matching_sq = next(
+                (sq for sq in reversed(session.subqueries) if sq.round == paper_round),
+                None,
+            )
+            if matching_sq:
+                sq_node = f"subquery:{matching_sq.text[:40]}:r{matching_sq.round}"
+                if sq_node in node_ids:
+                    edges.append({
+                        "source": sq_node,
+                        "target": paper_id,
+                        "type": "found",
+                        "round": matching_sq.round,
+                    })
 
     # Citation expansion edges
     for paper_id, paper in session.papers.items():

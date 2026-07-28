@@ -67,8 +67,14 @@ _TIER_TO_SERVER: dict[str, RelevanceTier] = {
 }
 
 
-def _to_server_paper(paper: Any) -> ServerPaper:
-    """Map a research `AcademicPaper` to the server `AcademicPaper`."""
+def _to_server_paper(paper: Any, round_number: int | None = None) -> ServerPaper:
+    """Map a research `AcademicPaper` to the server `AcademicPaper`.
+
+    Args:
+        paper: The research AcademicPaper model.
+        round_number: The 0-indexed round in which this paper was discovered.
+            None if the round is unknown.
+    """
     source = _SOURCE_TO_SERVER.get(
         str(paper.source).lower(),
         PaperSource.MANUAL,
@@ -85,6 +91,7 @@ def _to_server_paper(paper: Any) -> ServerPaper:
         doi=paper.doi,
         citation_count=paper.citation_count,
         relevance_tier=tier,
+        round=round_number,
         abstract=paper.abstract,
         url=paper.pdf_url or paper.url,
         source=source,
@@ -93,13 +100,21 @@ def _to_server_paper(paper: Any) -> ServerPaper:
     )
 
 
-def _to_server_subquery(sub: Any) -> ServerSubQuery:
-    """Map a research `SubQuery` to the server `SubQuery`."""
+def _to_server_subquery(sub: Any, round_number: int = 0) -> ServerSubQuery:
+    """Map a research `SubQuery` to the server `SubQuery`.
+
+    Args:
+        sub: The research SubQuery model.
+        round_number: The 0-indexed round this subquery belongs to.
+            Subqueries generated during query understanding (before search rounds)
+            should use round=0. Subqueries generated during search rounds
+            should use 1-indexed round numbers converted to 0-indexed.
+    """
     purpose = getattr(sub, "purpose", "") or ""
     return ServerSubQuery(
         text=sub.query,
         intent=purpose or "general",
-        round=0,
+        round=round_number,
     )
 
 
@@ -117,7 +132,7 @@ def _to_server_understanding(query: str, ru: Any | None) -> QueryUnderstanding:
                for d in (getattr(ru, "domains", []) or [])]
     domain = domains[0] if domains else None
     subqueries = [
-        _to_server_subquery(s) for s in (getattr(ru, "subqueries", []) or [])
+        _to_server_subquery(s, round_number=0) for s in (getattr(ru, "subqueries", []) or [])
     ] or [ServerSubQuery(text=query, intent="general", round=0)]
     return QueryUnderstanding(
         intent=str(getattr(ru, "intent", "general") or "general"),
@@ -186,9 +201,35 @@ def research_to_server_session(
             research UUID because the frontend and repository store the
             server-issued string id).
     """
+    # Build a mapping of paper_id -> round_number (0-indexed) for papers discovered during search
+    paper_rounds: dict[str, int] = {}
+    if rs.search_rounds:
+        for rnd in rs.search_rounds:
+            round_idx = rnd.round_number - 1  # Convert to 0-indexed
+            # Papers discovered in this round: candidates from searches + expanded refs
+            # The engine adds papers to session.all_papers as they are discovered
+            # We track papers by their order of appearance in rounds
+            pass
+    # Track papers discovered per round by looking at search results per round
+    # For now, we'll assign round based on when papers first appear in all_papers
+    # and match against the papers_discovered count per round
+    papers = {}
+    paper_order: list[str] = list((getattr(rs, "all_papers", {}) or {}).keys())
+    if rs.search_rounds:
+        # Calculate cumulative papers discovered up to each round
+        cumulative = 0
+        for rnd in rs.search_rounds:
+            round_idx = rnd.round_number - 1  # 0-indexed
+            # Papers discovered in this round
+            round_end = cumulative + rnd.papers_discovered
+            for paper_id in paper_order[cumulative:round_end]:
+                paper_rounds[paper_id] = round_idx
+            cumulative = round_end
+            if cumulative >= len(paper_order):
+                break
     papers = {
-        p.stable_id: _to_server_paper(p)
-        for p in (getattr(rs, "all_papers", {}) or {}).values()
+        p_id: _to_server_paper(p, round_number=paper_rounds.get(p_id))
+        for p_id, p in ((getattr(rs, "all_papers", {}) or {}).items())
     }
     evidence = _to_server_evidence(getattr(rs, "evidence", []) or [])
     answer_text = ""
@@ -196,10 +237,28 @@ def research_to_server_session(
         answer_text = rs.answer.answer or rs.answer.raw_answer or ""
     subqueries: list[ServerSubQuery] = []
     if rs.query_understanding is not None:
-        subqueries = [
-            _to_server_subquery(s)
-            for s in (rs.query_understanding.subqueries or [])
-        ]
+        # Initial subqueries from query understanding stage are at round 0
+        for s in (rs.query_understanding.subqueries or []):
+            subqueries.append(_to_server_subquery(s, round_number=0))
+    # Add follow-up subqueries from search rounds (1-indexed -> 0-indexed)
+    if rs.search_rounds:
+        for rnd in rs.search_rounds:
+            if rnd.subqueries_generated > 0:
+                # Follow-up subqueries generated during this round
+                for query_text in rnd.queries_executed:
+                    # Check if this query is a follow-up (not in initial subqueries)
+                    is_followup = True
+                    if rs.query_understanding:
+                        for init_sq in (rs.query_understanding.subqueries or []):
+                            if init_sq.query == query_text:
+                                is_followup = False
+                                break
+                    if is_followup:
+                        subqueries.append(ServerSubQuery(
+                            text=query_text,
+                            intent="followup",
+                            round=rnd.round_number - 1,  # Convert to 0-indexed
+                        ))
     return ServerSession(
         id=server_id,
         query=rs.query,
@@ -256,10 +315,24 @@ class ResearchEventBridge:
             )
         )
         sub_payload = [
-            _to_server_subquery(s).model_dump(exclude_none=True)
+            _to_server_subquery(s, round_number=0).model_dump(exclude_none=True)
             for s in (ru.subqueries if ru else [])
         ] or [{"text": self.rs.query, "intent": "general", "round": 0}]
         events.append(self._emit(EventType.SUBQUERIES, {"subqueries": sub_payload}))
+
+        # Build paper -> round mapping for SSE events
+        paper_order: list[str] = list((self.rs.all_papers or {}).keys())
+        paper_rounds: dict[str, int] = {}
+        if self.rs.search_rounds:
+            cumulative = 0
+            for rnd in self.rs.search_rounds:
+                round_idx = rnd.round_number - 1  # 0-indexed
+                round_end = cumulative + rnd.papers_discovered
+                for paper_id in paper_order[cumulative:round_end]:
+                    paper_rounds[paper_id] = round_idx
+                cumulative = round_end
+                if cumulative >= len(paper_order):
+                    break
 
         papers_seen: set[str] = set()
         for round_ in self.rs.search_rounds or []:
@@ -281,7 +354,7 @@ class ResearchEventBridge:
                 events.append(
                     self._emit(
                         EventType.PAPER_FOUND,
-                        _to_server_paper(paper).to_event_dict(),
+                        _to_server_paper(paper, round_number=paper_rounds.get(paper_id)).to_event_dict(),
                     )
                 )
             events.append(

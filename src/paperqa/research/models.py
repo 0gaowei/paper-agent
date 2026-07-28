@@ -9,7 +9,7 @@ evidence snippets, and final answer summaries.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, ClassVar
 from uuid import UUID, uuid4
@@ -427,7 +427,7 @@ class ResearchSession(BaseModel):
     id: UUID = Field(default_factory=uuid4, description="Unique session identifier.")
     query: str = Field(description="The original research query.")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="When the session was created.",
     )
     completed_at: datetime | None = Field(

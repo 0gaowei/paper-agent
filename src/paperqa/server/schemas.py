@@ -8,7 +8,7 @@ These schemas are designed to be:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -73,6 +73,10 @@ class AcademicPaper(BaseModel):
     relevance_tier: RelevanceTier = Field(
         default=RelevanceTier.IRRELEVANT,
         description="Relevance tier based on dual-threshold scoring.",
+    )
+    round: int | None = Field(
+        default=None,
+        description="The 0-indexed search round in which this paper was discovered.",
     )
     abstract: str | None = Field(default=None, description="Paper abstract.")
     url: str | None = Field(
@@ -156,11 +160,11 @@ class ResearchSession(BaseModel):
         "pending", "running", "done", "cancelled", "error"
     ] = Field(default="pending", description="Session status.")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Session creation timestamp.",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(UTC),
         description="Last update timestamp.",
     )
     understanding: QueryUnderstanding | None = Field(

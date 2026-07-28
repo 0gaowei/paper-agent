@@ -84,6 +84,11 @@ async def _run_research_engine(
         server_session = research_to_server_session(research_session, session_id)
         await repository.save(server_session)
 
+        # Populate paper cache for fast lookups
+        from paperqa.server.routes.papers import register_paper
+        for paper in server_session.papers.values():
+            register_paper(paper)
+
         bridge = ResearchEventBridge(session_id, research_session)
         for payload in bridge.build_events():
             await progress_callback.publish_raw(
