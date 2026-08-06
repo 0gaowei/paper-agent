@@ -29,7 +29,7 @@ from evoscholar.utils.llms import (
 )
 from .prompts import CANNOT_ANSWER_PHRASE, EMPTY_CONTEXTS
 from .readers import read_doc
-from evoscholar.settings import MaybeSettings, get_settings
+from evoscholar.literature_qa.settings import MaybeSettings, get_settings
 from .types import Doc, DocDetails, DocKey, PQASession, Text
 from evoscholar.utils import (
     citation_to_docname,

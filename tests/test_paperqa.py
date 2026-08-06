@@ -75,7 +75,7 @@ from evoscholar.readers import (
     read_doc,
     resolve_page_range,
 )
-from evoscholar.settings import (
+from evoscholar.literature_qa.settings import (
     AnswerSettings,
     AsyncContextSerializer,
     MultimodalOptions,

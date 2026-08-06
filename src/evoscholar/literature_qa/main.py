@@ -24,7 +24,7 @@ from tenacity import (
 
 from evoscholar._ldp_shims import Callback, RolloutManager
 from evoscholar.literature_qa.docs import Docs
-from evoscholar.settings import AgentSettings, Settings
+from evoscholar.literature_qa.settings import AgentSettings, Settings
 from evoscholar.literature_qa.core import PQASession
 
 from .env import PaperQAEnvironment

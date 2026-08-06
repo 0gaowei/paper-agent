@@ -28,7 +28,7 @@ from lmi.utils import (
 )
 
 if TYPE_CHECKING:
-    from evoscholar.settings import Settings
+    from evoscholar.literature_qa.settings import Settings
     from evoscholar.types import PQASession
 
 TESTS_DIR = Path(__file__).parent
@@ -48,7 +48,7 @@ def _setup_default_logs() -> None:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
     # > are already imported: evoscholar
-    from evoscholar.settings import ParsingSettings
+    from evoscholar.literature_qa.settings import ParsingSettings
     from evoscholar.utils import setup_default_logs
 
     setup_default_logs()
@@ -159,7 +159,7 @@ def agent_test_settings(agent_index_dir: Path, stub_data_dir: Path) -> Settings:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
     # > are already imported: evoscholar
-    from evoscholar.settings import Settings
+    from evoscholar.literature_qa.settings import Settings
 
     # NOTE: originally here we had usage of embedding="sparse", but this was
     # shown to be too crappy of an embedding to get past the Obama article

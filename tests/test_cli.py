@@ -10,7 +10,7 @@ from tenacity import Retrying, retry_if_exception_type, stop_after_attempt
 from evoscholar import Docs
 from evoscholar.agents import ask, build_index, main, search_query
 from evoscholar.agents.models import AnswerResponse
-from evoscholar.settings import Settings
+from evoscholar.literature_qa.settings import Settings
 from evoscholar.utils import pqa_directory
 
 

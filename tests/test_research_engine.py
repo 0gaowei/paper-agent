@@ -24,7 +24,7 @@ from evoscholar.research.ranking import (
     rank_with_mmr,
     score_papers,
 )
-from evoscholar.settings import Settings
+from evoscholar.literature_qa.settings import Settings
 
 
 class FakeProvider:

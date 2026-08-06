@@ -19,7 +19,7 @@ from evoscholar.utils.llms import (
     QdrantVectorStore,
     VectorStore,
 )
-from evoscholar.settings import Settings, get_settings
+from evoscholar.literature_qa.settings import Settings, get_settings
 from evoscholar.version import __version__
 
 __all__ = [

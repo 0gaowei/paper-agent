@@ -11,7 +11,7 @@ from aviary.utils import MultipleChoiceQuestion
 from pydantic_settings import CliSettingsSource
 from rich.logging import RichHandler
 
-from evoscholar.settings import ParsingSettings, Settings, get_settings
+from evoscholar.literature_qa.settings import ParsingSettings, Settings, get_settings
 from evoscholar.utils import pqa_directory, run_or_ensure, setup_default_logs
 from evoscholar.version import __version__
 

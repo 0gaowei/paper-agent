@@ -10,13 +10,13 @@ from pytest_subtests import SubTests
 
 import evoscholar.configs
 from evoscholar.prompts import citation_prompt
-from evoscholar.settings import (
+from evoscholar.iterative_search.settings import get_formatted_variables
+from evoscholar.literature_qa.settings import (
     AgentSettings,
     IndexSettings,
     MaybeSettings,
     PromptSettings,
     Settings,
-    get_formatted_variables,
     get_settings,
 )
 from evoscholar.types import Doc, DocDetails

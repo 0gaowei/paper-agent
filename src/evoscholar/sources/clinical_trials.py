@@ -18,7 +18,7 @@ from tenacity import (
 
 from evoscholar.literature_qa.core import DocDetails, Embeddable, Text
 from evoscholar.literature_qa.docs import Docs
-from evoscholar.settings import Settings
+from evoscholar.literature_qa.settings import Settings
 
 logger = logging.getLogger(__name__)
 

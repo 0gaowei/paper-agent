@@ -549,7 +549,7 @@ Please make sure to `pip install paper-qa[local]` to use a local embedding model
 
 ```python
 from evoscholar import Settings, ask
-from evoscholar.settings import AgentSettings
+from evoscholar.literature_qa.settings import AgentSettings
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -567,7 +567,7 @@ Or Gemini, by setting the `GEMINI_API_KEY` from Google AI Studio
 
 ```python
 from evoscholar import Settings, ask
-from evoscholar.settings import AgentSettings
+from evoscholar.literature_qa.settings import AgentSettings
 
 answer_response = ask(
     "What is PaperQA2?",

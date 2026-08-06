@@ -59,7 +59,7 @@ from evoscholar.agents.tools import (
 )
 from evoscholar.docs import Docs
 from evoscholar.prompts import CANNOT_ANSWER_PHRASE, CONTEXT_INNER_PROMPT_NOT_DETAILED
-from evoscholar.settings import AgentSettings, IndexSettings, Settings
+from evoscholar.literature_qa.settings import AgentSettings, IndexSettings, Settings
 from evoscholar.types import Context, Doc, DocDetails, PQASession, Text
 from evoscholar.utils import compute_unique_doc_id, extract_thought, get_year, md5sum
 

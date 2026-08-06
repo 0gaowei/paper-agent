@@ -272,62 +272,8 @@ class HistoryEntry(BaseModel):
     )
 
 
-class SettingsPayload(BaseModel):
-    """Settings read/write via the API (never exposes API keys)."""
-
-    researcher_llm: str | None = Field(
-        default=None,
-        description="LLM model used for research.",
-    )
-    researcher_llm_config: dict[str, Any] | None = Field(
-        default=None,
-        description="LLM configuration (no API keys).",
-    )
-    summary_llm: str | None = Field(
-        default=None,
-        description="LLM model used for summarization.",
-    )
-    # API configuration fields (stored server-side, returned without exposing secrets)
-    llm_api_key: str | None = Field(
-        default=None,
-        description="LLM API key (stored server-side, never returned to client).",
-    )
-    llm_base_url: str | None = Field(
-        default=None,
-        description="LLM base URL for custom endpoints.",
-    )
-    llm_provider: str | None = Field(
-        default=None,
-        description="LLM provider (e.g., openai, anthropic).",
-    )
-    max_rounds: int | None = Field(
-        default=None, ge=1, description="Maximum research rounds."
-    )
-    candidates_per_round: int | None = Field(
-        default=None, ge=1, description="Candidates per round."
-    )
-    citation_expansion_limit: int | None = Field(
-        default=None, ge=0, description="Max citation expansions per round."
-    )
-    high_relevance_threshold: float | None = Field(
-        default=None, ge=0.0, le=1.0,
-        description="High relevance threshold (0–1)."
-    )
-    partial_relevance_threshold: float | None = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Partial relevance threshold (0–1)."
-    )
-
-    # Key configuration status — always read-only booleans, never keys
-    llm_configured: bool = Field(
-        default=False,
-        description="Whether an LLM API key is configured.",
-    )
-    s2_configured: bool = Field(
-        default=False,
-        description="Whether a Semantic Scholar API key is configured.",
-    )
-    openalex_configured: bool = Field(
-        default=False,
-        description="Whether an OpenAlex API key is configured.",
-    )
+# NOTE: ``SettingsPayload`` previously lived here. It now lives in
+# ``evoscholar.server.routes.settings`` next to the router that uses it,
+# because it is a thin wrapper over the canonical ``Settings`` instance
+# stored on ``app.state.settings``. Importing it from ``routes.settings``
+# is the canonical path.

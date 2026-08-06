@@ -221,6 +221,36 @@ disable lint / catch 异常 / 注释掉测试——都要立即删掉或记录�
   - 使用 `__getattr__` 在 `synthesis/__init__.py` 中惰性导入 `build_evidence_and_answer`
 **教训**：跨包重构时先用 `TYPE_CHECKING` 包裹类型引用，避免顶层循环；业务代码（`AcademicSearchClient`）用延迟 import
 
+### settings 聚合器：literature_qa.settings → iterative_search.settings 是受文档豁免的反向依赖
+
+**触发条件**：Commit 9 把 `settings_config.py` 拆到各包后，主 `Settings` 类在 `literature_qa/settings.py`，需要聚合 `ResearchSettings`
+**现象**：`rg "from evoscholar.iterative_search" src/evoscholar/literature_qa/` 不是空 → 触发 agent-context.md §2.5 反向依赖校验警告
+**根因**：`literature_qa/settings.py` 顶层 `from evoscholar.iterative_search.settings import ResearchSettings, AsyncContextSerializer, _FormatDict, get_formatted_variables`，违反 §6.3 铁律 "literature_qa 不应依赖 iterative_search"
+**解法**：豁免。refactor-plan §3.5.2 明确把主 `Settings` 放在 `literature_qa/settings.py` 并通过 import 引用 `iterative_search/settings.py` 的 `ResearchSettings` — 这是**有意为之的聚合器依赖**。后续 Batch G 反向校验脚本应把这条加入白名单：
+```
+# 仅一处豁免：settings 聚合器
+rg "from evoscholar\.iterative_search\.settings" src/evoscholar/literature_qa/settings.py
+```
+**教训**：聚合器（aggregator）层是 §6.3 反向校验的"已知出口"，记录到 CI 白名单而不是误报
+
+### Pydantic 字段 `default_factory` 在模块导入时被绑定到具体函数引用
+
+**触发条件**：复制 `Settings` 类到 `literature_qa/settings.py` 时漏了 `index_directory` 的 `default_factory`
+**现象**：`Settings(parsing={...})` 报 `ValidationError: index_directory Field required`，但原始 `settings_config.py` 没问题
+**根因**：复制时漏了 `default_factory=lambda: pqa_directory("indexes")` — Pydantic 字段一旦类定义完成，缺省的 default 就是 `required`（Pydantic v2 行为）
+**解法**：diff 字段时**逐字段校对 default/default_factory**，不能只看 description；或在 Pydantic v2 用 `model_fields` 反射比对
+**教训**：跨文件复制 Pydantic model 时必须逐字段校对 default 值，必要时用 `pytest --diff-context` 自动校验字段一致性
+
+### paperqa_pymupdf / paperqa_pypdf 仍是 paperqa.* import 的依赖死结
+
+**触发条件**：`paperqa_pypdf` 包安装在 conda 环境，但 `paperqa` 包本身**没装**（已重命名为 `evoscholar`）
+**现象**：`from paperqa_pypdf import parse_pdf_to_pages` 报 `ModuleNotFoundError: No module named 'paperqa'`（paperqa_pypdf 内部 `from paperqa.readers import resolve_page_range` 等失败）
+**根因**：Commit 0 把 `paperqa` 包重命名为 `evoscholar`，但 `paperqa_pymupdf` / `paperqa_pypdf` 这两个独立 wheel 还没跟上，仍然 `import paperqa.*`。结果 `Settings()` 默认的 `parse_pdf` 工厂函数 `get_default_pdf_parser()` 永远拿不到一个能 import 的 parser，抛 `ImportError`
+**解法**：
+  - 短期：在 `Settings()` 调用处提供 `parsing={"parse_pdf": <具体函数>}` 覆盖默认
+  - 长期：升级 `paperqa_pymupdf` / `paperqa_pypdf` wheel，让它们 `import evoscholar.*` 或兼容 `paperqa.*`
+**教训**：跨包依赖在 `import` 语句上是字符串级别的硬引用，重命名上游包会让下游 wheel 全部爆炸 — 必须在重命名时**同步**发新版 wheel
+
 ---
 
 ## 一句话总结

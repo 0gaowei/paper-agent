@@ -18,7 +18,7 @@ from aviary.utils import MultipleChoiceQuestion
 from lmi import EmbeddingModel, LiteLLMModel
 
 from evoscholar.literature_qa.docs import Docs
-from evoscholar.settings import Settings
+from evoscholar.literature_qa.settings import Settings
 from evoscholar.sources.clinical_trials import (
     CLINICAL_TRIALS_BASE,
     partition_clinical_trials_by_source,

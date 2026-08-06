@@ -28,18 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 def _build_research_engine(
-    client: httpx.AsyncClient, *, providers: list[str] | None = None
+    app: FastAPI, providers: list[str] | None = None
 ) -> Any:
-    """Instantiate a ResearchEngine.
+    """Instantiate a ResearchEngine using the live ``app.state.settings``.
 
     Imports are deferred so that the server can start even when the
-    `paperqa.research` package (or its LLM/search deps) is missing in a
+    ``paperqa.research`` package (or its LLM/search deps) is missing in a
     lightweight test environment. On failure we log and return ``None``
     so the routes keep responding with their stub events.
     """
     try:
         from evoscholar.research import ResearchEngine
-        from evoscholar.settings import Settings
         from evoscholar.server.routes.settings import get_llm_credentials
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -47,15 +46,34 @@ def _build_research_engine(
         )
         return None
     try:
-        settings = Settings()
+        # Use the live aggregated settings instance as the source of truth.
+        settings = getattr(app.state, "settings", None)
+        if settings is None:
+            # Lifespan failed to initialize settings — fall back to a fresh one.
+            from evoscholar.literature_qa.settings import Settings as _Settings
+
+            settings = _Settings()
+
         # Apply API credentials from settings page if configured
         llm_api_key, llm_base_url = get_llm_credentials()
-        if llm_api_key:
-            settings.llm_api_key = llm_api_key
-        if llm_base_url:
-            settings.llm_base_url = llm_base_url
+        if llm_api_key or llm_base_url:
+            updates: dict[str, object] = {}
+            if llm_api_key:
+                updates["llm_api_key"] = llm_api_key
+            if llm_base_url:
+                updates["llm_base_url"] = llm_base_url
+            settings = settings.model_copy(update=updates)
+            # Mirror back onto app.state so subsequent reads are consistent.
+            app.state.settings = settings  # type: ignore[attr-defined]
+
         if providers is not None:
-            settings.research.providers = providers
+            settings = settings.model_copy(
+                update={"research": settings.research.model_copy(update={"providers": providers})}
+            )
+            app.state.settings = settings  # type: ignore[attr-defined]
+
+        # Use a shared httpx.AsyncClient from app.state if available
+        client = getattr(app.state, "client", None)
         return ResearchEngine(settings=settings, providers=client)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -73,6 +91,27 @@ def _build_research_engine(
 async def lifespan(app: FastAPI):
     """Application lifespan: startup → shared resources → shutdown cleanup."""
 
+    # Initialize the aggregated settings instance (single source of truth).
+    # Server Settings (HTTP/credentials) are layered on top via routes/settings.py.
+    try:
+        from evoscholar.literature_qa.settings import Settings
+        from evoscholar.server.routes.settings import get_llm_credentials
+
+        app.state.settings = Settings()  # type: ignore[attr-defined]
+        # Apply any pre-configured LLM credentials (set before startup by
+        # other processes, tests, or earlier config writes).
+        llm_api_key, llm_base_url = get_llm_credentials()
+        if llm_api_key or llm_base_url:
+            updates: dict[str, object] = {}
+            if llm_api_key:
+                updates["llm_api_key"] = llm_api_key
+            if llm_base_url:
+                updates["llm_base_url"] = llm_base_url
+            app.state.settings = app.state.settings.model_copy(update=updates)  # type: ignore[attr-defined]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to initialize app.state.settings: %s", exc)
+        # Leave app.state.settings unset; routes will return 503 if hit.
+
     # Shared httpx.AsyncClient (reused by downstream clients/engines)
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
         app.state.client = client  # type: ignore[attr-defined]
@@ -87,7 +126,7 @@ async def lifespan(app: FastAPI):
         app.state.tasks: dict[str, asyncio.Task[None]] = {}  # type: ignore[attr-defined]
 
         # Real ResearchEngine (lazily constructed; may be None in tests)
-        app.state.engine = _build_research_engine(client)  # type: ignore[attr-defined]
+        app.state.engine = _build_research_engine(app)  # type: ignore[attr-defined]
 
         logger.info(
             "PaperQA server started — engine=%s",

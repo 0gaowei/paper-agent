@@ -15,7 +15,7 @@ from lmi import Embeddable, EmbeddingModel, LiteLLMModel
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from evoscholar.literature_qa.docs import Docs
-from evoscholar.settings import Settings
+from evoscholar.literature_qa.settings import Settings
 from evoscholar.sources.clinical_trials import add_clinical_trials_to_docs
 from evoscholar.literature_qa.core import Context, DocDetails, PQASession
 
