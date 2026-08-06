@@ -33,21 +33,21 @@ from pytest_subtests import SubTests
 from tantivy import Index
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt
 
-from paperqa.agents import SearchIndex, agent_query
-from paperqa.agents.env import (
+from evoscholar.agents import SearchIndex, agent_query
+from evoscholar.agents.env import (
     CLINICAL_STATUS_SEARCH_REGEX_PATTERN,
     PaperQAEnvironment,
     clinical_trial_status,
     settings_to_tools,
 )
-from paperqa.agents.main import FAKE_AGENT_TYPE, run_agent
-from paperqa.agents.models import AgentStatus, AnswerResponse
-from paperqa.agents.search import (
+from evoscholar.agents.main import FAKE_AGENT_TYPE, run_agent
+from evoscholar.agents.models import AgentStatus, AnswerResponse
+from evoscholar.agents.search import (
     FAILED_DOCUMENT_ADD_ID,
     get_directory_index,
     maybe_get_manifest,
 )
-from paperqa.agents.tools import (
+from evoscholar.agents.tools import (
     ClinicalTrialsSearch,
     Complete,
     EnvironmentState,
@@ -57,11 +57,11 @@ from paperqa.agents.tools import (
     Reset,
     make_status,
 )
-from paperqa.docs import Docs
-from paperqa.prompts import CANNOT_ANSWER_PHRASE, CONTEXT_INNER_PROMPT_NOT_DETAILED
-from paperqa.settings import AgentSettings, IndexSettings, Settings
-from paperqa.types import Context, Doc, DocDetails, PQASession, Text
-from paperqa.utils import compute_unique_doc_id, extract_thought, get_year, md5sum
+from evoscholar.docs import Docs
+from evoscholar.prompts import CANNOT_ANSWER_PHRASE, CONTEXT_INNER_PROMPT_NOT_DETAILED
+from evoscholar.settings import AgentSettings, IndexSettings, Settings
+from evoscholar.types import Context, Doc, DocDetails, PQASession, Text
+from evoscholar.utils import compute_unique_doc_id, extract_thought, get_year, md5sum
 
 
 @pytest.mark.asyncio
@@ -571,7 +571,7 @@ async def test_gather_evidence_rejects_empty_docs(
     # we keep running until we get truncated
     with (
         patch(
-            "paperqa.agents.env.settings_to_tools",
+            "evoscholar.agents.env.settings_to_tools",
             side_effect=[
                 [
                     Tool.from_function(
@@ -824,7 +824,7 @@ def test_settings_model_config() -> None:
     ), "Test assertions are only effective if there's something to configure"
 
     with Path(
-        str(importlib.resources.files("paperqa.configs") / f"{settings_name}.json")
+        str(importlib.resources.files("evoscholar.configs") / f"{settings_name}.json")
     ).open() as f:
         raw_settings = json.loads(f.read())
 

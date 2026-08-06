@@ -20,8 +20,8 @@ from fastapi.testclient import TestClient
 # Ensure the package is on the path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from paperqa.server.app import app
-from paperqa.server.repository import JSONFileRepository
+from evoscholar.server.app import app
+from evoscholar.server.repository import JSONFileRepository
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ def client() -> TestClient:
         tmp_path = anyio.Path(tmp)
         # Replace the repository in app.state after startup
         with TestClient(app) as tc:
-            from paperqa.server.repository import JSONFileRepository
+            from evoscholar.server.repository import JSONFileRepository
 
             tc.app.state.repository = JSONFileRepository(sessions_dir=tmp_path)
             yield tc
@@ -69,7 +69,7 @@ def client() -> TestClient:
 @pytest.fixture
 def client_with_repo(client: TestClient, temp_sessions_dir: Path) -> TestClient:
     """Client with an isolated repository pointing to a temp directory."""
-    from paperqa.server.repository import JSONFileRepository
+    from evoscholar.server.repository import JSONFileRepository
 
     import anyio
 
@@ -133,7 +133,7 @@ class _StubResearchEngine:
         session_id: str | None = None,
         **_: Any,
     ) -> Any:
-        from paperqa.research.models import (
+        from evoscholar.research.models import (
             AnswerSummary,
             QueryUnderstanding,
             RelevanceTier,
@@ -149,7 +149,7 @@ class _StubResearchEngine:
         await asyncio.sleep(0)
 
         if publisher and session_id:
-            from paperqa.server.events import EventType, SSEEvent
+            from evoscholar.server.events import EventType, SSEEvent
 
             await publisher.publish(
                 session_id,
@@ -228,7 +228,7 @@ def _stub_paper(
     stable_id: str, title: str, year: int, tier: str, citations: int,
     *, sources: tuple[str, ...] = (),
 ) -> Any:
-    from paperqa.research.models import AcademicPaper, RelevanceTier
+    from evoscholar.research.models import AcademicPaper, RelevanceTier
 
     return AcademicPaper(
         stable_id=stable_id,
@@ -582,7 +582,7 @@ class TestHistory:
         repo: JSONFileRepository = client_with_repo.app.state.repository
 
         # Manually insert a session file
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         session = ResearchSession(
@@ -627,7 +627,7 @@ class TestHistoryDelete:
         repo: JSONFileRepository = client_with_repo.app.state.repository
 
         # Insert a session
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         session = ResearchSession(
@@ -668,8 +668,8 @@ class TestPapers:
 
         repo: JSONFileRepository = client_with_repo.app.state.repository
 
-        from paperqa.server.schemas import AcademicPaper, PaperSource, RelevanceTier
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import AcademicPaper, PaperSource, RelevanceTier
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         paper = AcademicPaper(
@@ -710,7 +710,7 @@ class TestSessionGraph:
 
         repo: JSONFileRepository = client_with_repo.app.state.repository
 
-        from paperqa.server.schemas import ResearchSession, SubQuery
+        from evoscholar.server.schemas import ResearchSession, SubQuery
         import datetime
 
         session = ResearchSession(
@@ -761,7 +761,7 @@ class TestRepository:
     async def test_save_and_load_roundtrip(
         self, repository: JSONFileRepository
     ) -> None:
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         session = ResearchSession(
@@ -781,7 +781,7 @@ class TestRepository:
     async def test_save_atomic_creates_json_file(
         self, repository: JSONFileRepository
     ) -> None:
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         session = ResearchSession(
@@ -806,7 +806,7 @@ class TestRepository:
 
     @pytest.mark.anyio
     async def test_delete_removes_file(self, repository: JSONFileRepository) -> None:
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         session = ResearchSession(
@@ -827,7 +827,7 @@ class TestRepository:
     ) -> None:
         import datetime
 
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
 
         sessions = [
             ResearchSession(
@@ -850,7 +850,7 @@ class TestRepository:
 
     @pytest.mark.anyio
     async def test_exists(self, repository: JSONFileRepository) -> None:
-        from paperqa.server.schemas import ResearchSession
+        from evoscholar.server.schemas import ResearchSession
         import datetime
 
         assert await repository.exists("new-session") is False

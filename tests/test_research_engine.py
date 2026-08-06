@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 from lmi import LLMResult
 
-from paperqa.research.engine import ResearchEngine
-from paperqa.research.models import (
+from evoscholar.research.engine import ResearchEngine
+from evoscholar.research.models import (
     AcademicPaper,
     Domain,
     QueryIntent,
@@ -18,13 +18,13 @@ from paperqa.research.models import (
     SearchResult,
     StopReason,
 )
-from paperqa.research.query_understanding import analyze_and_expand_query
-from paperqa.research.ranking import (
+from evoscholar.research.query_understanding import analyze_and_expand_query
+from evoscholar.research.ranking import (
     _lexical_relevance,
     rank_with_mmr,
     score_papers,
 )
-from paperqa.settings import Settings
+from evoscholar.settings import Settings
 
 
 class FakeProvider:

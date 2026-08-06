@@ -7,11 +7,11 @@ from unittest.mock import patch
 import pytest
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt
 
-from paperqa import Docs
-from paperqa.agents import ask, build_index, main, search_query
-from paperqa.agents.models import AnswerResponse
-from paperqa.settings import Settings
-from paperqa.utils import pqa_directory
+from evoscholar import Docs
+from evoscholar.agents import ask, build_index, main, search_query
+from evoscholar.agents.models import AnswerResponse
+from evoscholar.settings import Settings
+from evoscholar.utils import pqa_directory
 
 
 def test_can_modify_settings(capsys, stub_data_dir: Path) -> None:
@@ -99,7 +99,7 @@ def test_settings_index_name_used_when_index_arg_is_default(
         agent={"index": {"paper_directory": stub_data_dir, "name": "my_named_index"}}
     )
 
-    with patch("paperqa.agents.get_directory_index") as mock_get_directory_index:
+    with patch("evoscholar.agents.get_directory_index") as mock_get_directory_index:
         # When --index isn't provided, the default name of "default" will still
         # respect a custom-specified index name
         build_index("default", stub_data_dir, settings)
@@ -109,7 +109,7 @@ def test_settings_index_name_used_when_index_arg_is_default(
     passed_settings = mock_get_directory_index.call_args.kwargs["settings"]
     assert passed_settings.agent.index.name == "my_named_index"
 
-    with patch("paperqa.agents.index_search", return_value=[]) as mock_index_search:
+    with patch("evoscholar.agents.index_search", return_value=[]) as mock_index_search:
         # When --index isn't provided, the default name of "default" will still
         # respect a custom-specified index name
         search_query("XAI", "default", settings)

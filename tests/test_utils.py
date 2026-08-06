@@ -1,4 +1,4 @@
-from paperqa.utils import citation_to_docname
+from evoscholar.utils import citation_to_docname
 
 
 def test_citation_to_docname_acronym_title() -> None:

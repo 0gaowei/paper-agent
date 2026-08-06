@@ -8,9 +8,9 @@ import pytest
 from pydantic import BaseModel, ValidationError
 from pytest_subtests import SubTests
 
-import paperqa.configs
-from paperqa.prompts import citation_prompt
-from paperqa.settings import (
+import evoscholar.configs
+from evoscholar.prompts import citation_prompt
+from evoscholar.settings import (
     AgentSettings,
     IndexSettings,
     MaybeSettings,
@@ -19,8 +19,8 @@ from paperqa.settings import (
     get_formatted_variables,
     get_settings,
 )
-from paperqa.types import Doc, DocDetails
-from paperqa.utils import get_year
+from evoscholar.types import Doc, DocDetails
+from evoscholar.utils import get_year
 from tests.conftest import TESTS_DIR
 
 
@@ -218,7 +218,7 @@ def test_citation_prompt_current_year():
 def test_validity_of_bundled_configs(subtests: SubTests) -> None:
     for config_file in [
         f
-        for f in importlib.resources.files(paperqa.configs).iterdir()
+        for f in importlib.resources.files(evoscholar.configs).iterdir()
         if f.name.endswith(".json")
     ]:
         config_name = config_file.name.removesuffix(".json")

@@ -28,8 +28,8 @@ from lmi.utils import (
 )
 
 if TYPE_CHECKING:
-    from paperqa.settings import Settings
-    from paperqa.types import PQASession
+    from evoscholar.settings import Settings
+    from evoscholar.types import PQASession
 
 TESTS_DIR = Path(__file__).parent
 CASSETTES_DIR = TESTS_DIR / "cassettes"
@@ -44,12 +44,12 @@ def _load_env() -> None:
 
 @pytest.fixture(autouse=True, scope="session")
 def _setup_default_logs() -> None:
-    # Lazily import from paperqa so typeguard doesn't throw:
+    # Lazily import from evoscholar so typeguard doesn't throw:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
-    # > are already imported: paperqa
-    from paperqa.settings import ParsingSettings
-    from paperqa.utils import setup_default_logs
+    # > are already imported: evoscholar
+    from evoscholar.settings import ParsingSettings
+    from evoscholar.utils import setup_default_logs
 
     setup_default_logs()
     ParsingSettings.model_fields["configure_pdf_parser"].default()
@@ -155,11 +155,11 @@ def fixture_stub_data_dir() -> Path:
 
 @pytest.fixture
 def agent_test_settings(agent_index_dir: Path, stub_data_dir: Path) -> Settings:
-    # Lazily import from paperqa so typeguard doesn't throw:
+    # Lazily import from evoscholar so typeguard doesn't throw:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
-    # > are already imported: paperqa
-    from paperqa.settings import Settings
+    # > are already imported: evoscholar
+    from evoscholar.settings import Settings
 
     # NOTE: originally here we had usage of embedding="sparse", but this was
     # shown to be too crappy of an embedding to get past the Obama article
@@ -174,11 +174,11 @@ def agent_test_settings(agent_index_dir: Path, stub_data_dir: Path) -> Settings:
 
 @pytest.fixture
 def agent_stub_session() -> PQASession:
-    # Lazily import from paperqa so typeguard doesn't throw:
+    # Lazily import from evoscholar so typeguard doesn't throw:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
-    # > are already imported: paperqa
-    from paperqa.types import PQASession
+    # > are already imported: evoscholar
+    from evoscholar.types import PQASession
 
     return PQASession(question="What is a self-explanatory model?")
 

@@ -6,11 +6,11 @@ from collections import Counter
 
 import pytest
 
-from paperqa.clients.academic_search import (
+from evoscholar.clients.academic_search import (
     AcademicSearchClient,
     AcademicSearchProvider,
 )
-from paperqa.research.models import AcademicPaper, SearchResult
+from evoscholar.research.models import AcademicPaper, SearchResult
 
 
 class FakeProvider:

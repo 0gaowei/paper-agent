@@ -14,23 +14,23 @@ import httpx
 import httpx_aiohttp
 import pytest
 
-import paperqa
-from paperqa.clients import (
+import evoscholar as paperqa
+from evoscholar.clients import (
     ALL_CLIENTS,
     CrossrefProvider,
     DocMetadataClient,
     SemanticScholarProvider,
 )
-from paperqa.clients.client_models import MetadataPostProcessor, MetadataProvider
-from paperqa.clients.exceptions import DOINotFoundError
-from paperqa.clients.journal_quality import (
+from evoscholar.clients.client_models import MetadataPostProcessor, MetadataProvider
+from evoscholar.clients.exceptions import DOINotFoundError
+from evoscholar.clients.journal_quality import (
     DEFAULT_JOURNAL_QUALITY_CSV_PATH,
     JournalQualityPostProcessor,
 )
-from paperqa.clients.openalex import OpenAlexProvider, reformat_name
-from paperqa.clients.retractions import RetractionDataPostProcessor
-from paperqa.clients.semantic_scholar import s2_title_search
-from paperqa.types import SOURCE_QUALITY_MESSAGES, DocDetails
+from evoscholar.clients.openalex import OpenAlexProvider, reformat_name
+from evoscholar.clients.retractions import RetractionDataPostProcessor
+from evoscholar.clients.semantic_scholar import s2_title_search
+from evoscholar.types import SOURCE_QUALITY_MESSAGES, DocDetails
 
 # Use to avoid flaky tests every time citation count changes
 CITATION_COUNT_SENTINEL = "CITATION_COUNT_SENTINEL"
@@ -394,7 +394,7 @@ async def test_s2_title_search_edge_cases(
 ) -> None:
     async with httpx_aiohttp.HttpxAiohttpClient() as http_client:
         with patch(
-            "paperqa.clients.semantic_scholar._s2_get_with_retrying",
+            "evoscholar.clients.semantic_scholar._s2_get_with_retrying",
             return_value=return_value,
         ):
             with pytest.raises(DOINotFoundError, match=match):
@@ -619,9 +619,9 @@ async def test_odd_client_requests() -> None:
 
 
 @pytest.mark.asyncio
-@patch.object(paperqa.clients.crossref, "CROSSREF_API_REQUEST_TIMEOUT", 0.001)
+@patch.object(evoscholar.clients.crossref, "CROSSREF_API_REQUEST_TIMEOUT", 0.001)
 @patch.object(
-    paperqa.clients.semantic_scholar, "SEMANTIC_SCHOLAR_API_REQUEST_TIMEOUT", 0.001
+    evoscholar.clients.semantic_scholar, "SEMANTIC_SCHOLAR_API_REQUEST_TIMEOUT", 0.001
 )
 async def test_ensure_robust_to_timeouts() -> None:
     async with httpx_aiohttp.HttpxAiohttpClient() as http_client:
@@ -643,7 +643,7 @@ def test_bad_init() -> None:
 @pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_ensure_sequential_run(caplog) -> None:
-    caplog.set_level(logging.DEBUG, logger=paperqa.clients.__name__)
+    caplog.set_level(logging.DEBUG, logger=evoscholar.clients.__name__)
     # were using a DOI that is NOT in crossref, but running the crossref client first
     # we will ensure that both are run sequentially
 
@@ -663,7 +663,7 @@ async def test_ensure_sequential_run(caplog) -> None:
         assert details, "Should find the right DOI in the second client"
         record_indices: dict[str, list[int]] = {"crossref": [], "semantic_scholar": []}
         for n, record in enumerate(caplog.records):
-            if not record.name.startswith(paperqa.__name__):  # Skip non-PQA logs
+            if not record.name.startswith(evoscholar.__name__):  # Skip non-PQA logs
                 continue
             if "CrossrefProvider" in record.msg:
                 record_indices["crossref"].append(n)
@@ -689,7 +689,7 @@ async def test_ensure_sequential_run(caplog) -> None:
 @pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_ensure_sequential_run_early_stop(caplog) -> None:
-    caplog.set_level(logging.DEBUG, logger=paperqa.clients.__name__)
+    caplog.set_level(logging.DEBUG, logger=evoscholar.clients.__name__)
     # now we should stop after hitting s2
     async with httpx_aiohttp.HttpxAiohttpClient() as http_client:
         client = DocMetadataClient(
@@ -711,7 +711,7 @@ async def test_ensure_sequential_run_early_stop(caplog) -> None:
             "early_stop": [],
         }
         for n, record in enumerate(caplog.records):
-            if not record.name.startswith(paperqa.__name__):  # Skip non-PQA logs
+            if not record.name.startswith(evoscholar.__name__):  # Skip non-PQA logs
                 continue
             if "CrossrefProvider" in record.msg:
                 record_indices["crossref"].append(n)

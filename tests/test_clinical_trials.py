@@ -6,8 +6,8 @@ import httpx
 import httpx_aiohttp
 import pytest
 
-from paperqa import Docs, Settings
-from paperqa.sources.clinical_trials import (
+from evoscholar import Docs, Settings
+from evoscholar.sources.clinical_trials import (
     add_clinical_trials_to_docs,
     api_get_clinical_trial,
     api_search_clinical_trials,

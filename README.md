@@ -355,7 +355,7 @@ pqa --settings <setting name> \
 
 ### Bundled Settings
 
-Inside [`src/paperqa/configs`](src/paperqa/configs) we bundle known useful settings:
+Inside [`src/evoscholar/configs`](src/evoscholar/configs) we bundle known useful settings:
 
 | Setting Name | Description                                                                                                                  |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -375,7 +375,7 @@ For each OpenAI tier, a pre-built setting exists to limit usage.
 pqa --settings 'tier1_limits' ask 'What is PaperQA2?'
 ```
 
-This will limit your system to use the [tier1_limits](src/paperqa/configs/tier1_limits.json),
+This will limit your system to use the [tier1_limits](src/evoscholar/configs/tier1_limits.json),
 and slow down your queries to accommodate.
 
 You can also specify them manually with any rate limit string that matches the specification in
@@ -389,7 +389,7 @@ pqa --summary_llm_config '{"rate_limit": {"gpt-4o-2024-11-20": "30000 per 1 minu
 Or by adding into a `Settings` object, if calling imperatively:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -405,7 +405,7 @@ answer_response = ask(
 PaperQA2's full workflow can be accessed via Python directly:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -423,7 +423,7 @@ The answer object has the following attributes:
 you can specify this location via the `Settings` object:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -437,7 +437,7 @@ answer_response = ask(
 which can be accessed if you'd like to run concurrent asynchronous workloads:
 
 ```python
-from paperqa import Settings, agent_query
+from evoscholar import Settings, agent_query
 
 answer_response = await agent_query(
     query="What is PaperQA2?",
@@ -462,7 +462,7 @@ Note that manually adding and querying `Docs` does not impact performance.
 It just removes the automation associated with an agent picking the documents to add.
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 # valid extensions include .pdf, .txt, .md, .html, .docx, .xlsx, .pptx, and code files (e.g., .py, .ts, .yaml)
 doc_paths = ("myfile.pdf", "myotherfile.pdf")
@@ -502,7 +502,7 @@ So you can do this in a Jupyter Notebook:
 
 ```python
 import asyncio
-from paperqa import Docs
+from evoscholar import Docs
 
 
 async def main() -> None:
@@ -533,7 +533,7 @@ which in turn uses `litellm` to support many LLM providers.
 You can adjust this easily to use any model supported by `litellm`:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -548,8 +548,8 @@ In this example, we also use a different embedding model.
 Please make sure to `pip install paper-qa[local]` to use a local embedding model.
 
 ```python
-from paperqa import Settings, ask
-from paperqa.settings import AgentSettings
+from evoscholar import Settings, ask
+from evoscholar.settings import AgentSettings
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -566,8 +566,8 @@ answer_response = ask(
 Or Gemini, by setting the `GEMINI_API_KEY` from Google AI Studio
 
 ```python
-from paperqa import Settings, ask
-from paperqa.settings import AgentSettings
+from evoscholar import Settings, ask
+from evoscholar.settings import AgentSettings
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -592,7 +592,7 @@ and execute it with `-cb -np 4 -a my-llm-model --embedding`
 which will enable continuous batching and embeddings.
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 local_llm_config = dict(
     model_list=[
@@ -625,7 +625,7 @@ Models hosted with `ollama` are also supported.
 To run the example below make sure you have downloaded llama3.2 and mxbai-embed-large via ollama.
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 local_llm_config = {
     "model_list": [
@@ -666,7 +666,7 @@ but has flexible options for both vector stores and embedding choices.
 The simplest way to specify the embedding model is via `Settings.embedding`:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -684,7 +684,7 @@ Embedding models are used to create PaperQA2's index of the full-text embedding 
 The embedding model can be specified as a setting when you are adding new papers to the `Docs` object:
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 docs = Docs()
 for doc in ("myfile.pdf", "myotherfile.pdf"):
@@ -701,7 +701,7 @@ you can an external vector database like [Qdrant](https://qdrant.tech/) via the 
 The hybrid embeddings can be customized:
 
 ```python
-from paperqa import (
+from evoscholar import (
     Docs,
     HybridEmbeddingModel,
     SparseEmbeddingModel,
@@ -733,7 +733,7 @@ pip install paper-qa[local]
 and then prefix embedding model names with `st-`:
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -744,7 +744,7 @@ answer_response = ask(
 or with a hybrid model
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "What is PaperQA2?",
@@ -761,7 +761,7 @@ After this step, a limit of `max_sources` is applied so that the final answer ca
 Thus, `k` > `max_sources` and `max_sources` is the number of sources used in the final answer.
 
 ```python
-from paperqa import Settings
+from evoscholar import Settings
 
 settings = Settings()
 settings.answer.answer_max_sources = 3
@@ -784,7 +784,7 @@ so you will need to provide them yourself.
 ```python
 import glob
 import os
-from paperqa import Docs
+from evoscholar import Docs
 
 source_files = glob.glob("**/*.js")
 
@@ -839,7 +839,7 @@ the summary LLM is passed both the chunk's text and the chunk's associated media
 but the output contextual summary itself remains text-only.
 
 If you would like,
-specifying the prompt `paperqa.prompts.summary_json_multimodal_system_prompt`
+specifying the prompt `evoscholar.prompts.summary_json_multimodal_system_prompt`
 to the setting `prompt.summary_json_system`
 will include a `used_images` flag attributing
 usage of images in any contextual summarizations.
@@ -850,7 +850,7 @@ You may want to cache parsed texts and embeddings in an external database or fil
 You can then build a Docs object from those directly:
 
 ```python
-from paperqa import Docs, Doc, Text
+from evoscholar import Docs, Doc, Text
 
 docs = Docs()
 
@@ -902,9 +902,9 @@ In general, it's advisable to:
 ```python
 import os
 
-from paperqa import Settings
-from paperqa.agents.main import agent_query
-from paperqa.agents.search import get_directory_index
+from evoscholar import Settings
+from evoscholar.agents.main import agent_query
+from evoscholar.agents.search import get_directory_index
 
 
 async def amain(folder_of_papers: str | os.PathLike) -> None:
@@ -935,7 +935,7 @@ and [Semantic Scholar](https://www.semanticscholar.org/) can provide citation li
 Here's a short demo of how to do this:
 
 ```python
-from paperqa.clients import DocMetadataClient, ALL_CLIENTS
+from evoscholar.clients import DocMetadataClient, ALL_CLIENTS
 
 client = DocMetadataClient(metadata_clients=ALL_CLIENTS)
 details = await client.query(title="Augmenting language models with chemistry tools")
@@ -1074,7 +1074,7 @@ you need to provide a function that can be executed on each chunk.
 For example, to get a typewriter view of the completions, you can do:
 
 ```python
-from paperqa import Docs
+from evoscholar import Docs
 
 
 def typewriter(chunk: str) -> None:
@@ -1099,7 +1099,7 @@ you should be able to avoid re-embedding your documents.
 You can customize any of the prompts using settings.
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 my_qa_prompt = (
     "Answer the question '{question}'\n"

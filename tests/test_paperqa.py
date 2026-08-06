@@ -58,38 +58,38 @@ from paperqa import (
     Text,
     VectorStore,
 )
-from paperqa.clients import CrossrefProvider
-from paperqa.clients.journal_quality import JournalQualityPostProcessor
-from paperqa.core import (
+from evoscholar.clients import CrossrefProvider
+from evoscholar.clients.journal_quality import JournalQualityPostProcessor
+from evoscholar.core import (
     LLMContextTimeoutError,
     _map_fxn_summary,
     llm_parse_json,
     map_fxn_summary,
 )
-from paperqa.prompts import CANNOT_ANSWER_PHRASE, summary_json_multimodal_system_prompt
-from paperqa.prompts import qa_prompt as default_qa_prompt
-from paperqa.readers import (
+from evoscholar.prompts import CANNOT_ANSWER_PHRASE, summary_json_multimodal_system_prompt
+from evoscholar.prompts import qa_prompt as default_qa_prompt
+from evoscholar.readers import (
     PDFParserFn,
     chunk_pdf,
     parse_image,
     read_doc,
     resolve_page_range,
 )
-from paperqa.settings import (
+from evoscholar.settings import (
     AnswerSettings,
     AsyncContextSerializer,
     MultimodalOptions,
     ParsingSettings,
     PromptSettings,
 )
-from paperqa.types import (
+from evoscholar.types import (
     ChunkMetadata,
     Context,
     ParsedMedia,
     ParsedMetadata,
     ParsedText,
 )
-from paperqa.utils import (
+from evoscholar.utils import (
     clean_possessives,
     encode_id,
     extract_score,
@@ -2274,7 +2274,7 @@ async def test_image_enrichment_invalid_image(caplog) -> None:
     )
 
     enricher = Settings().make_media_enricher()
-    with caplog.at_level("WARNING", logger="paperqa.settings"):
+    with caplog.at_level("WARNING", logger="evoscholar.settings"):
         result = await enricher(parsed_text)
     assert "enriched=0" in result, "Expected no enrichment to have occurred"
     (record_tuple,) = caplog.record_tuples
@@ -2298,7 +2298,7 @@ async def test_image_enrichment_with_oversized_image(caplog) -> None:
     settings = Settings(parsing={"enrichment_llm": "claude-sonnet-4-5-20250929"})
     enricher = settings.make_media_enricher()  # noqa: FURB184
     with (
-        caplog.at_level("WARNING", logger="paperqa.settings"),
+        caplog.at_level("WARNING", logger="evoscholar.settings"),
         # Use patch over VCR since VCR cassette would be huge
         patch(
             "litellm.llms.anthropic.chat.handler.AnthropicChatCompletion.acompletion_function",
@@ -2577,7 +2577,7 @@ def test_missing_page_doesnt_crash_us() -> None:
 
 
 def test_zotero() -> None:
-    from paperqa.contrib import ZoteroDB
+    from evoscholar.contrib import ZoteroDB
 
     Docs()
     with contextlib.suppress(ValueError):  # Close enough
@@ -3656,7 +3656,7 @@ async def test_reader_config_propagation(stub_data_dir: Path, multimodal: bool) 
     docs = Docs()
     with (
         patch(
-            "paperqa.docs.read_doc", side_effect=RuntimeError("sentinel")
+            "evoscholar.docs.read_doc", side_effect=RuntimeError("sentinel")
         ) as mock_read_doc,
         pytest.raises(RuntimeError, match="sentinel"),
     ):
