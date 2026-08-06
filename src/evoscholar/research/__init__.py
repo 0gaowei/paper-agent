@@ -27,4 +27,12 @@ def __getattr__(name: str) -> Any:
         from .engine import ResearchEngine
 
         return ResearchEngine
+    if name in ("score_papers", "ascore_papers", "rank_with_mmr"):
+        from evoscholar.paper_ranker import (
+            ascore_papers,
+            rank_with_mmr,
+            score_papers,
+        )
+
+        return locals()[name]
     raise AttributeError(name)
