@@ -191,6 +191,12 @@ disable lint / catch 异常 / 注释掉测试——都要立即删掉或记录�
 **根因**：`_TrackedLLMAdapter` 只暴露 `call_single`，不暴露 `acomplete`；`FakeLLM.call_single` 原本返回 `answer_payload`（非 JSON），query understanding 阶段触发 `_extract_json` 抛 `ValueError` → 旧代码走 `_heuristic_understanding` 兜底成功返回合法 QU → 新代码直接抛错被 `engine.arun` 的 `except Exception` 捕获 → `stop_reason = ERROR`
 **解法**：修改 `FakeLLM.call_single` 在首次调用时返回 JSON payload（query 阶段），后续返回 `answer_payload`（answer 阶段）；同样修复 `FailingAnswerLLM.call_single` 首次返回 JSON 避免误拦截 query 阶段
 
+### 新建目录时注意与同名 .py 文件冲突（shadowing）
+
+**触发条件**：refactor-plan Commit 1 创建 `core/`、`settings/`、`utils/` 等包目录，而 `core.py`、`settings.py`、`utils.py` 已存在
+**现象**：`from evoscholar.core import llm_parse_json` 报错 `ImportError: cannot import name 'llm_parse_json' from 'evoscholar.core'` —— Python 将目录优先于同名 .py 文件
+**解法**：将同名 .py 文件重命名为 `core_impl.py`、`settings_config.py`、`utils_helpers.py`，并在对应的 `__init__.py` 中 re-export 旧名称。参见 Commit 1。
+
 ### git status --short 列显示顺序导致误判 dirty files
 
 **触发条件**：commit 前用 `git status` 查看 dirty 状态

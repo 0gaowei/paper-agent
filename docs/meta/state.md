@@ -13,8 +13,17 @@
 ## Architecture
 
 ```
-paper-qa/
-├── src/paperqa/
+evoscholar/
+├── src/evoscholar/
+│   ├── core/                   # 空包，为 refactor-plan §1 预留
+│   ├── literature_qa/          # 空包，为 refactor-plan §1 预留
+│   ├── query_understanding/     # 空包，为 refactor-plan §1 预留
+│   ├── iterative_search/      # 空包，为 refactor-plan §1 预留
+│   ├── paper_ranker/           # 空包，为 refactor-plan §1 预留
+│   ├── synthesis/             # 空包，为 refactor-plan §1 预留
+│   ├── metadata_clients/      # 空包，为 refactor-plan §1 预留
+│   ├── settings/              # re-exports from settings_config.py
+│   ├── utils/                 # re-exports from utils_helpers.py
 │   ├── research/
 │   │   ├── engine.py          # 核心搜索循环，arun()，多轮迭代
 │   │   ├── query_understanding.py  # LLM 意图分析，子查询分解
@@ -28,7 +37,10 @@ paper-qa/
 │   │   ├── bridge.py          # ResearchSession → SSE 事件，build_events()
 │   │   ├── sse_callback.py    # SSEProgressCallback 实现
 │   │   └── events.py          # EventType 枚举
-│   └── clients/               # Semantic Scholar / OpenAlex / Crossref API
+│   ├── clients/               # Semantic Scholar / OpenAlex / Crossref API
+│   ├── core_impl.py           # 原 core.py（重命名避免与 core/ 目录冲突）
+│   ├── utils_helpers.py       # 原 utils.py（重命名避免与 utils/ 目录冲突）
+│   └── settings_config.py     # 原 settings.py（重命名避免与 settings/ 目录冲突）
 ├── frontend/src/
 │   ├── stores/search.ts       # 前端状态，applyEvent()，normalize()
 │   ├── views/
@@ -48,6 +60,9 @@ paper-qa/
 | 2026-07-29 | 移除 query understanding 启发式兜底，LLM 失败直接抛错 | 原 heuristic 方案质量差，且让 sessions.py 里 fallback_used 逻辑复杂化 |
 | 2026-07-29 | 删除 `QueryUnderstanding.fallback_used` / `error_message` 字段及所有相关代码 | 兜底路径已移除，这些字段不再有意义 |
 | 2026-07-29 | 建立 state.md + gotchas.md 替代 HANDOFF | HANDOFF 文件过多且割裂，改用单一状态入口 + 坑集积累 |
+| 2026-08-06 | 包重命名 paperqa → evoscholar | refactor-plan Batch A Commit 0：git mv + 全局 import 替换 |
+| 2026-08-06 | 包目录骨架创建 + shadowing 修复 | refactor-plan Batch A Commit 1：新建 core/ 等 9 个包目录；重命名 core.py→core_impl.py、settings.py→settings_config.py、utils.py→utils_helpers.py 以避免同名冲突 |
+| 2026-08-06 | sys.modules 兼容垫片：evoscholar/__init__.py 末尾将 paperqa alias 指向 evoscholar | 过渡期允许 import paperqa 仍可用 |
 | 2026-07-27 | SSE ERROR 事件字段从 `message` 改为 `error` | 前端 expect `{error: string}`，字段名不匹配导致前端无法展示错误 |
 | 2026-07-27 | `_TrackedLLMAdapter` 只暴露 `call_single`，不暴露 `acomplete` | 统一接口，但导致 test stub 中 FakeLLM 需要在 call_single 首次返回 JSON |
 | 2026-07-26 | 合并 roadmap → state.md，roadmap 冻结 | 功能清单已过时，用 state.md 替代 |
