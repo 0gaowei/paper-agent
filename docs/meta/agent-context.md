@@ -193,8 +193,8 @@ pytest tests/ -x -q --tb=short
 
 | Batch | 状态 | commit hash | 备注 |
 |---|---|---|---|
-| A | 待执行 | — | — |
-| B | 待执行 | — | — |
+| A | 已完成 | c1abafb (Commit 0) / 1ca5bb4 (Commit 1) | 包重命名 + 骨架创建 |
+| B | 已完成 | afba223 (Commit 2) / a462e43 (Commit 3) | clients→metadata_clients + query_understanding 提取 |
 | C | 待执行 | — | — |
 | D | 待执行 | — | — |
 | E | 待执行 | — | — |
