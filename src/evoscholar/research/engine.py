@@ -29,7 +29,7 @@ from .models import (
     StopReason,
     UsageStats,
 )
-from .query_understanding import analyze_and_expand_query
+from evoscholar.query_understanding import analyze_and_expand_query
 from .ranking import ascore_papers, rank_with_mmr, score_papers
 
 if TYPE_CHECKING:

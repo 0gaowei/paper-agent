@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evoscholar.types import Doc, DocDetails
 
+from .academic_search import AcademicSearchClient, AcademicSearchProvider
 from .client_models import MetadataPostProcessor, MetadataProvider
 from .crossref import CrossrefProvider
 from .journal_quality import JournalQualityPostProcessor
