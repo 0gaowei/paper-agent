@@ -133,15 +133,10 @@ class _StubResearchEngine:
         session_id: str | None = None,
         **_: Any,
     ) -> Any:
-        from evoscholar.research.models import (
-            AnswerSummary,
-            QueryUnderstanding,
-            RelevanceTier,
-            ResearchSession,
-            SearchRound,
-            SubQuery,
-            UsageStats,
-        )
+        from evoscholar.iterative_search.models import ResearchSession, SearchRound
+        from evoscholar.synthesis.models import AnswerSummary, UsageStats
+        from evoscholar.query_understanding.models import QueryUnderstanding, SubQuery
+        from evoscholar.paper_ranker.relevance import RelevanceTier
 
         self.arun_calls.append(query)
         # Yield to the event loop so SSE consumers can interleave with
@@ -228,7 +223,8 @@ def _stub_paper(
     stable_id: str, title: str, year: int, tier: str, citations: int,
     *, sources: tuple[str, ...] = (),
 ) -> Any:
-    from evoscholar.research.models import AcademicPaper, RelevanceTier
+    from evoscholar.iterative_search.models import AcademicPaper
+    from evoscholar.paper_ranker.relevance import RelevanceTier
 
     return AcademicPaper(
         stable_id=stable_id,

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from pytest_subtests import SubTests
 
 import evoscholar.configs
-from evoscholar.prompts import citation_prompt
+from evoscholar.literature_qa.core import citation_prompt
 from evoscholar.iterative_search.settings import get_formatted_variables
 from evoscholar.literature_qa.settings import (
     AgentSettings,
@@ -19,7 +19,7 @@ from evoscholar.literature_qa.settings import (
     Settings,
     get_settings,
 )
-from evoscholar.types import Doc, DocDetails
+from evoscholar.literature_qa.core import Doc, DocDetails
 from evoscholar.utils import get_year
 from tests.conftest import TESTS_DIR
 

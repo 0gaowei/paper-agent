@@ -9,21 +9,20 @@ from typing import Any
 import pytest
 from lmi import LLMResult
 
-from evoscholar.research.engine import ResearchEngine
-from evoscholar.research.models import (
+from evoscholar.iterative_search.engine import ResearchEngine
+from evoscholar.iterative_search.models import (
     AcademicPaper,
-    Domain,
-    QueryIntent,
-    RelevanceTier,
     SearchResult,
     StopReason,
 )
-from evoscholar.research.query_understanding import analyze_and_expand_query
-from evoscholar.research.ranking import (
+from evoscholar.query_understanding.models import Domain, QueryIntent
+from evoscholar.paper_ranker.relevance import RelevanceTier
+from evoscholar.query_understanding.analyze import analyze_and_expand_query
+from evoscholar.paper_ranker.ranker import (
     _lexical_relevance,
-    rank_with_mmr,
     score_papers,
 )
+from evoscholar.paper_ranker.mmr import rank_with_mmr
 from evoscholar.literature_qa.settings import Settings
 
 

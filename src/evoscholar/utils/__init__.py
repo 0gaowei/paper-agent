@@ -1,6 +1,20 @@
-# Backward-compatible re-exports from the utils helpers module.
-# This module exists because refactor-plan §1 defines utils/ as a top-level package.
-from evoscholar.utils_helpers import (
+"""Cross-package utilities shared by ≥2 feature packages.
+
+Per refactor-plan §3.5.3, this package is for code shared across multiple
+feature packages (literature_qa / iterative_search / paper_ranker / synthesis /
+query_understanding / metadata_clients / server). Code used by only one
+package should live in that package's own ``core.py`` instead.
+
+Module layout:
+
+- ``paths.py`` — path / directory constants
+- ``llms.py`` — generic LLM factory helpers and vector store base classes
+- ``_helpers.py`` — generic helpers (entropy checks, retries, formatting, etc.)
+"""
+
+from __future__ import annotations
+
+from ._helpers import (
     BIBTEX_MAPPING,
     CitationConversionError,
     INVALID_UNICODE_CHARS,

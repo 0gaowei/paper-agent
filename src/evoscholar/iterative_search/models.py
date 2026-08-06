@@ -1,14 +1,23 @@
-"""
-Domain models for the iterative search pipeline.
+"""Domain models for the iterative search pipeline.
 
 These models define the data structures used for iterative paper search,
 including stop reasons, citation edges, paper models, and research sessions.
 
-Note: EvidenceSnippet, AnswerSummary, and UsageStats are now owned by the
-synthesis package. This module re-exports them for backward compatibility.
+Note: ``EvidenceSnippet`` / ``AnswerSummary`` / ``UsageStats`` are owned by
+``evoscholar.synthesis.models``. We import them lazily at module-import time
+to keep the iterative_search ↔ synthesis module graph acyclic while still
+allowing Pydantic to resolve the types directly.
 """
 
 from __future__ import annotations
+
+# Late imports: avoid iterative_search ↔ synthesis top-level cycles.
+# UsageStats / AnswerSummary / EvidenceSnippet are owned by synthesis.models.
+from evoscholar.synthesis.models import (
+    AnswerSummary,
+    EvidenceSnippet,
+    UsageStats,
+)
 
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -17,22 +26,15 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Import RelevanceTier from paper_ranker (direct dependency, no circular import)
 from evoscholar.paper_ranker.relevance import RelevanceTier
 
-# Re-export synthesis types for backward compatibility
-from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet, UsageStats
-
 __all__ = [
-    "AnswerSummary",
     "CitationEdge",
     "AcademicPaper",
-    "EvidenceSnippet",
     "ResearchSession",
     "SearchResult",
     "SearchRound",
     "StopReason",
-    "UsageStats",
 ]
 
 
@@ -265,7 +267,7 @@ class ResearchSession(BaseModel):
     )
 
     usage: UsageStats = Field(
-        default=UsageStats,
+        default_factory=lambda: UsageStats(),
         description="Resource usage statistics.",
     )
 
@@ -289,5 +291,7 @@ class ResearchSession(BaseModel):
     def partial_relevant_papers(self) -> list[AcademicPaper]:
         """Papers with partial relevance."""
         return [
-            p for p in self.final_papers if p.relevance_tier == RelevanceTier.PARTIAL
+            p
+            for p in self.final_papers
+            if p.relevance_tier == RelevanceTier.PARTIAL
         ]

@@ -33,21 +33,21 @@ from pytest_subtests import SubTests
 from tantivy import Index
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt
 
-from evoscholar.agents import SearchIndex, agent_query
-from evoscholar.agents.env import (
+from evoscholar.literature_qa import SearchIndex, agent_query
+from evoscholar.literature_qa.env import (
     CLINICAL_STATUS_SEARCH_REGEX_PATTERN,
     PaperQAEnvironment,
     clinical_trial_status,
     settings_to_tools,
 )
-from evoscholar.agents.main import FAKE_AGENT_TYPE, run_agent
-from evoscholar.agents.models import AgentStatus, AnswerResponse
-from evoscholar.agents.search import (
+from evoscholar.literature_qa.main import FAKE_AGENT_TYPE, run_agent
+from evoscholar.literature_qa.models import AgentStatus, AnswerResponse
+from evoscholar.literature_qa.search import (
     FAILED_DOCUMENT_ADD_ID,
     get_directory_index,
     maybe_get_manifest,
 )
-from evoscholar.agents.tools import (
+from evoscholar.literature_qa.tools import (
     ClinicalTrialsSearch,
     Complete,
     EnvironmentState,
@@ -57,10 +57,10 @@ from evoscholar.agents.tools import (
     Reset,
     make_status,
 )
-from evoscholar.docs import Docs
-from evoscholar.prompts import CANNOT_ANSWER_PHRASE, CONTEXT_INNER_PROMPT_NOT_DETAILED
+from evoscholar.literature_qa.core import Docs  # noqa: F401  (was docs.Docs)
+from evoscholar.literature_qa.core import CANNOT_ANSWER_PHRASE, CONTEXT_INNER_PROMPT_NOT_DETAILED  # was prompts.CONTEXT_INNER_PROMPT_NOT_DETAILED
 from evoscholar.literature_qa.settings import AgentSettings, IndexSettings, Settings
-from evoscholar.types import Context, Doc, DocDetails, PQASession, Text
+from evoscholar.literature_qa.core import Context, Doc, DocDetails, PQASession, Text
 from evoscholar.utils import compute_unique_doc_id, extract_thought, get_year, md5sum
 
 

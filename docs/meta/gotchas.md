@@ -251,6 +251,44 @@ rg "from evoscholar\.iterative_search\.settings" src/evoscholar/literature_qa/se
   - 长期：升级 `paperqa_pymupdf` / `paperqa_pypdf` wheel，让它们 `import evoscholar.*` 或兼容 `paperqa.*`
 **教训**：跨包依赖在 `import` 语句上是字符串级别的硬引用，重命名上游包会让下游 wheel 全部爆炸 — 必须在重命名时**同步**发新版 wheel
 
+### 删除 compat shim 后 utils/__init__.py 重定向到内部模块 (`utils_helpers.py` → `utils/_helpers.py`)
+
+**触发条件**：Batch G（Commit 10）删除根目录 `utils_helpers.py`（来自 Commit 1 的"避免与 utils/ 目录 shadowing"命名），需要保留其内容。
+**现象**：如果只删 `utils_helpers.py` 而不重建，`from evoscholar.utils import citation_to_docname` 等会全部崩。
+**根因**：`utils_helpers.py`（25kb/716 行）聚合了 paths/llms/math/string/bibtex/重试/编码 等等多个职责，被 `utils/__init__.py` 整体 re-export。所有这些函数被分散 import 在 `literature_qa/types.py`、`metadata_clients/journal_quality.py` 等各处。
+**解法**：
+  - 把 `utils_helpers.py` 整体重命名为 `utils/_helpers.py`（下划线前缀表示包内私有）
+  - `utils/__init__.py` 改为 `from ._helpers import (...)` 重新导出
+  - `utils/paths.py` 和 `utils/llms.py` 保持不变（之前已经作为独立子模块存在，Commit 8 拆分结果）
+**教训**：批量删除 compat shim 时，要先做依赖审计（哪些 import 从被删文件来），不能直接 `git rm`。这次 utils_helpers 删除差点让整个 `import evoscholar` 链路崩溃。
+
+### `paperqa` sys.modules 别名只在 evoscholar 已加载后生效
+
+**触发条件**：Batch G 保留 `sys.modules["paperqa"] = evoscholar` 别名（用户决策：保留 `paperqa` alias 让 `paperqa_pypdf` 等下游 wheel 能继续工作）。
+**现象**：直接 `import paperqa`（在干净环境，没先 import evoscholar）会失败 `ModuleNotFoundError`，但 `from paperqa_pypdf import parse_pdf_to_pages`（settings 已 import 过一次 evoscholar）能成功。
+**根因**：Python 导入机制按以下顺序执行：
+  1. 用户 `import paperqa`
+  2. Python 检查 `sys.modules["paperqa"]` — 不存在
+  3. Python 找 `paperqa` 包 — 不存在
+  4. `ImportError`
+  在干净环境里，**没有任何东西**先 import evoscholar，所以别名从未设置。
+**解法**：
+  - 不去解决"`import paperqa` 在干净环境失败" — 这本来就不是 in-tree 用法
+  - 在 in-tree 代码中（`Settings()`、`from evoscholar import ...`），evoscholar 总是先 import，然后别名才生效 — 这正是 `paperqa_pypdf` wheel 的实际使用场景
+  - 这就是为什么 `from paperqa import Docs, Settings` 在 `paperqa_pypdf` 的 import chain 里能工作：先是 evoscholar 被加载（被 `Settings` 触发），然后别名被设置，然后 paperqa_pypdf 内部 `from paperqa.readers import resolve_page_range` 命中别名
+**教训**：保留 compat 别名时，要明确它生效的实际场景。脱离 in-tree 触发链的"纯用户视角 import paperqa"不在承诺范围内。
+
+### 完整删除 compat 时 iter↔synth cycle 复活
+
+**触发条件**：Batch G 删除 `iterative_search/models.py` 里 `from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet, UsageStats` 的反向 re-export 后。
+**现象**：`NameError: name 'UsageStats' is not defined`，出现在 `ResearchSession.usage: UsageStats = Field(default=UsageStats, ...)`，因为 imports 是顶层 import，没有"绕过"反向 re-export。
+**根因**：`iterative_search.ResearchSession` 字段类型引用 `synthesis.UsageStats`；之前 `iterative_search/models.py` 顶层 import 它，所以模块加载时 `UsageStats` 已经在命名空间。删 re-export 后 import 没了，但 `default=UsageStats`（类对象引用）依然在。
+**解法**：
+  - 在 `iterative_search/models.py` 顶层 **重新 import** `AnswerSummary` / `EvidenceSnippet` / `UsageStats`（从 `synthesis.models`），并标注了为什么（避免循环）
+  - `UsageStats` 不引起循环：先 import `synthesis.models` 不依赖 `iterative_search`
+  - `AcademicPaper`（反向）依然走 TYPE_CHECKING
+**教训**：批量删除 compat re-export 前，对每个被 re-export 的符号做"如果是 Pydantic model 字段类型 → 仍需顶层 import；如果是 TYPE_CHECKING only → 删除安全"二分判断。
+
 ---
 
 ## 一句话总结

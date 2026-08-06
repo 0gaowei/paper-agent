@@ -10,8 +10,8 @@ from lmi import (
     embedding_model_factory,
 )
 
-from evoscholar.agents import ask
-from evoscholar.agents.main import agent_query
+from evoscholar.literature_qa import ask
+from evoscholar.literature_qa.main import agent_query
 from evoscholar.literature_qa.docs import Docs
 from evoscholar.literature_qa.core import Context, Doc, DocDetails, PQASession, Text
 from evoscholar.utils.llms import (
@@ -48,7 +48,14 @@ __all__ = [
     "get_settings",
 ]
 
-# Compatibility shim: allow `import paperqa` to continue working during transition.
+# Compatibility alias: keep ``import paperqa`` working so legacy downstream
+# code (e.g. ``paperqa_pypdf`` / ``paperqa_pymupdf`` wheels that still
+# reference paperqa.*) keeps loading. New in-tree code imports from
+# ``evoscholar.*`` directly.
+#
+# Note: Python inserts the importing module into ``sys.modules`` *before*
+# executing ``__init__.py``, so ``sys.modules["evoscholar"]`` is reliably
+# available here.
 import sys as _sys
 
 _paperqa = _sys.modules.get("evoscholar")

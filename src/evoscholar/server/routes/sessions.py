@@ -47,7 +47,7 @@ async def _run_research_engine(
         ResearchEventBridge,
         research_to_server_session,
     )
-    from evoscholar.research.query_understanding import analyze_and_expand_query
+    from evoscholar.query_understanding.analyze import analyze_and_expand_query
 
     try:
         if engine is None:

@@ -4,7 +4,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from evoscholar.research.models import AcademicPaper
+    from evoscholar.iterative_search.models import AcademicPaper
 
 _TOKEN_PATTERN = re.compile(r"[\w]+", flags=re.UNICODE)
 

@@ -6,11 +6,11 @@ from collections import Counter
 
 import pytest
 
-from evoscholar.clients.academic_search import (
+from evoscholar.metadata_clients.academic_search import (
     AcademicSearchClient,
     AcademicSearchProvider,
 )
-from evoscholar.research.models import AcademicPaper, SearchResult
+from evoscholar.iterative_search.models import AcademicPaper, SearchResult
 
 
 class FakeProvider:

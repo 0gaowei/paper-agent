@@ -12,7 +12,7 @@ from lmi import embedding_model_factory
 
 from evoscholar.query_understanding import analyze_and_expand_query
 from evoscholar.paper_ranker.relevance import RelevanceTier
-from evoscholar.research.ranking import ascore_papers, rank_with_mmr, score_papers
+from evoscholar.paper_ranker import ascore_papers, rank_with_mmr, score_papers
 
 from .callbacks import NoOpProgressCallback, ResearchProgressCallback
 from .models import (

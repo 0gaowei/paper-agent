@@ -44,7 +44,7 @@ from evoscholar.server.schemas import (
 )
 
 if TYPE_CHECKING:
-    from evoscholar.research.models import ResearchSession as ResearchSessionModel
+    from evoscholar.iterative_search.models import ResearchSession as ResearchSessionModel
 
 logger = logging.getLogger(__name__)
 

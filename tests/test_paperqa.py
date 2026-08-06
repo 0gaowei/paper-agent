@@ -47,7 +47,7 @@ from paperqa_pypdf import parse_pdf_to_pages as pypdf_parse_pdf_to_pages
 from pydantic import ValidationError
 from pytest_subtests import SubTests
 
-from paperqa import (
+from evoscholar.literature_qa import (
     Doc,
     DocDetails,
     Docs,
@@ -58,17 +58,20 @@ from paperqa import (
     Text,
     VectorStore,
 )
-from evoscholar.clients import CrossrefProvider
-from evoscholar.clients.journal_quality import JournalQualityPostProcessor
-from evoscholar.core import (
+from evoscholar.metadata_clients import CrossrefProvider
+from evoscholar.metadata_clients.journal_quality import JournalQualityPostProcessor
+from evoscholar.literature_qa.core import (
     LLMContextTimeoutError,
     _map_fxn_summary,
     llm_parse_json,
     map_fxn_summary,
 )
-from evoscholar.prompts import CANNOT_ANSWER_PHRASE, summary_json_multimodal_system_prompt
-from evoscholar.prompts import qa_prompt as default_qa_prompt
-from evoscholar.readers import (
+from evoscholar.literature_qa.core import (
+    CANNOT_ANSWER_PHRASE,
+    summary_json_multimodal_system_prompt,
+)
+from evoscholar.literature_qa.core import qa_prompt as default_qa_prompt
+from evoscholar.literature_qa.core import (
     PDFParserFn,
     chunk_pdf,
     parse_image,
@@ -82,7 +85,7 @@ from evoscholar.literature_qa.settings import (
     ParsingSettings,
     PromptSettings,
 )
-from evoscholar.types import (
+from evoscholar.literature_qa.core import (
     ChunkMetadata,
     Context,
     ParsedMedia,

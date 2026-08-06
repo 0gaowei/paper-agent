@@ -11,7 +11,7 @@ from aviary.core import Message
 from lmi import LiteLLMModel
 from pydantic import BaseModel, Field
 
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 try:
     import openreview

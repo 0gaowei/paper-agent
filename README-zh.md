@@ -386,7 +386,7 @@ pqa --summary_llm_config '{"rate_limit": {"gpt-4o-2024-11-20": "30000 per 1 minu
 或者，如果命令式调用，添加到 `Settings` 对象中：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -402,7 +402,7 @@ answer_response = ask(
 PaperQA2 的完整工作流程可以通过 Python 直接访问：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -420,7 +420,7 @@ answer_response = ask(
 您可以通过 `Settings` 对象指定此位置：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -434,7 +434,7 @@ answer_response = ask(
 如果您想运行并发异步工作负载，可以访问它：
 
 ```python
-from paperqa import Settings, agent_query
+from evoscholar import Settings, agent_query
 
 answer_response = await agent_query(
     query="什么是 PaperQA2？",
@@ -459,7 +459,7 @@ answer_response = await agent_query(
 它只是删除了与代理选择要添加的文档相关的自动化。
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 # 支持的扩展名包括 .pdf、.txt、.md、.html、.docx、.xlsx、.pptx 和代码文件（例如 .py、.ts、.yaml）
 doc_paths = ("myfile.pdf", "myotherfile.pdf")
@@ -499,7 +499,7 @@ PaperQA2 被编写为异步使用。
 
 ```python
 import asyncio
-from paperqa import Docs
+from evoscholar import Docs
 
 
 async def main() -> None:
@@ -530,7 +530,7 @@ PaperQA2 还默认使用 OpenAI 的 `text-embedding-3-small` 模型作为 `embed
 您可以轻松调整以使用 `litellm` 支持的任何模型：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -545,8 +545,8 @@ answer_response = ask(
 请确保 `pip install paper-qa[local]` 以使用本地嵌入模型。
 
 ```python
-from paperqa import Settings, ask
-from paperqa.settings import AgentSettings
+from evoscholar import Settings, ask
+from evoscholar.literature_qa.settings import AgentSettings
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -563,8 +563,8 @@ answer_response = ask(
 或 Gemini，通过设置 Google AI Studio 的 `GEMINI_API_KEY`
 
 ```python
-from paperqa import Settings, ask
-from paperqa.settings import AgentSettings
+from evoscholar import Settings, ask
+from evoscholar.literature_qa.settings import AgentSettings
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -589,7 +589,7 @@ answer_response = ask(
 这将启用连续批处理和嵌入。
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 local_llm_config = dict(
     model_list=[
@@ -622,7 +622,7 @@ answer_response = ask(
 要运行下面的示例，请确保已通过 ollama 下载 llama3.2 和 mxbai-embed-large。
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 local_llm_config = {
     "model_list": [
@@ -663,7 +663,7 @@ PaperQA2 默认使用 OpenAI（`text-embedding-3-small`）嵌入，
 指定嵌入模型最简单的方法是通过 `Settings.embedding`：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -681,7 +681,7 @@ PaperQA2 还支持嵌入输入 `"hybrid-<model_name>"`
 嵌入模型可以在将新论文添加到 `Docs` 对象时指定为设置：
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 docs = Docs()
 for doc in ("myfile.pdf", "myotherfile.pdf"):
@@ -698,7 +698,7 @@ for doc in ("myfile.pdf", "myotherfile.pdf"):
 混合嵌入可以自定义：
 
 ```python
-from paperqa import (
+from evoscholar import (
     Docs,
     HybridEmbeddingModel,
     SparseEmbeddingModel,
@@ -730,7 +730,7 @@ pip install paper-qa[local]
 然后使用 `st-` 前缀嵌入模型名称：
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -741,7 +741,7 @@ answer_response = ask(
 或使用混合模型
 
 ```python
-from paperqa import Settings, ask
+from evoscholar import Settings, ask
 
 answer_response = ask(
     "什么是 PaperQA2？",
@@ -758,7 +758,7 @@ answer_response = ask(
 因此，`k` > `max_sources`，而 `max_sources` 是最终答案中使用的来源数量。
 
 ```python
-from paperqa import Settings
+from evoscholar import Settings
 
 settings = Settings()
 settings.answer.answer_max_sources = 3
@@ -781,7 +781,7 @@ await docs.aquery(
 ```python
 import glob
 import os
-from paperqa import Docs
+from evoscholar import Docs
 
 source_files = glob.glob("**/*.js")
 
@@ -847,7 +847,7 @@ print(session)
 然后您可以直接从这些构建 Docs 对象：
 
 ```python
-from paperqa import Docs, Doc, Text
+from evoscholar import Docs, Doc, Text
 
 docs = Docs()
 
@@ -898,9 +898,9 @@ for ... in my_docs:
 ```python
 import os
 
-from paperqa import Settings
-from paperqa.agents.main import agent_query
-from paperqa.agents.search import get_directory_index
+from evoscholar import Settings
+from evoscholar.literature_qa.main import agent_query
+from evoscholar.literature_qa.search import get_directory_index
 
 
 async def amain(folder_of_papers: str | os.PathLike) -> None:
@@ -931,7 +931,7 @@ PaperQA2 最强大的功能之一是能够组合来自多个元数据源的数�
 以下是简短的演示：
 
 ```python
-from paperqa.clients import DocMetadataClient, ALL_CLIENTS
+from evoscholar.metadata_clients import DocMetadataClient, ALL_CLIENTS
 
 client = DocMetadataClient(metadata_clients=ALL_CLIENTS)
 details = await client.query(title="使用化学工具增强语言模型")
@@ -1070,7 +1070,7 @@ details = await client.query(
 例如，要获取补全的打字机视图，您可以这样做：
 
 ```python
-from paperqa import Docs
+from evoscholar import Docs
 
 
 def typewriter(chunk: str) -> None:
@@ -1095,7 +1095,7 @@ await docs.aquery("什么是 PaperQA2？", callbacks=[typewriter])
 您可以使用设置自定义任何提示词。
 
 ```python
-from paperqa import Docs, Settings
+from evoscholar import Docs, Settings
 
 my_qa_prompt = (
     "回答问题 '{question}'\n"

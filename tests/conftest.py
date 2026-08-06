@@ -29,7 +29,7 @@ from lmi.utils import (
 
 if TYPE_CHECKING:
     from evoscholar.literature_qa.settings import Settings
-    from evoscholar.types import PQASession
+    from evoscholar.literature_qa.core import PQASession
 
 TESTS_DIR = Path(__file__).parent
 CASSETTES_DIR = TESTS_DIR / "cassettes"
@@ -178,7 +178,7 @@ def agent_stub_session() -> PQASession:
     # > /path/to/.venv/lib/python3.12/site-packages/typeguard/_pytest_plugin.py:93:
     # > InstrumentationWarning: typeguard cannot check these packages because they
     # > are already imported: evoscholar
-    from evoscholar.types import PQASession
+    from evoscholar.literature_qa.core import PQASession
 
     return PQASession(question="What is a self-explanatory model?")
 

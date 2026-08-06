@@ -38,7 +38,7 @@ def _build_research_engine(
     so the routes keep responding with their stub events.
     """
     try:
-        from evoscholar.research import ResearchEngine
+        from evoscholar.iterative_search.engine import ResearchEngine
         from evoscholar.server.routes.settings import get_llm_credentials
     except Exception as exc:  # noqa: BLE001
         logger.warning(

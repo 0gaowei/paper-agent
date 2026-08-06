@@ -199,7 +199,37 @@ pytest tests/ -x -q --tb=short
 | D | 已完成 | 716a5c9 (Commit 6) | synthesis 包提取 + SSE 事件拆分 |
 | E | 已完成 | 539c8b7 (Commit 8) | 根目录文件 → 各包 core.py + utils/ |
 | F | 已完成 | a2b4c50 (Commit 9) | settings 下沉 + Server Settings 合并 |
-| G | 待执行 | — | — |
+| G | 已完成 | fc4b6d3 (Commit 10) | 清理所有 compat shim + paperqa alias 保留 |
+
+**Batch G 子 Agent 报告**：
+```
+Batch G 完成
+- Commit 10: fc4b6d3  refactor: 删除所有兼容垫片（Commit 10）
+- 验证:
+  - 旧路径失效: OK (17 个旧 import path 全部 ImportError)
+  - 新路径正常: OK (literature_qa / iterative_search / paper_ranker / synthesis /
+              query_understanding / metadata_clients / server / utils 全部 import OK)
+  - 全量测试: 部分失败（19 个 research_engine + 22 个 clients/clinical_trials =
+              41 个失败，全部是预存条件：缺少 paper-qa-pypdf/mupdf wheel 或
+              journal_quality.csv 数据文件，非 Batch G 引入）
+  - 依赖反向校验: OK (literature_qa/settings.py → iterative_search/settings 是
+                §3.5.2 文档豁免的聚合器依赖)
+- 删除的兼容垫片:
+  - 目录: src/evoscholar/agents/, src/evoscholar/research/, src/evoscholar/settings/ (空)
+  - 文件: src/evoscholar/clients.py, src/evoscholar/utils_helpers.py
+  - re-export: iterative_search/models.py 里 re-export from synthesis.models
+- 改动文件: src/evoscholar/__init__.py, contrib/openreview_paper_helper.py,
+  iterative_search/{engine.py,models.py}, paper_ranker/{mmr.py,ranker.py},
+  server/{app.py,bridge.py,routes/sessions.py}, synthesis/models.py,
+  utils/__init__.py + 新建 utils/_helpers.py (utils_helpers.py 重命名),
+  7 个测试文件 (conftest + test_{academic_search,agents,cli,clients,configs,
+  paperqa,research_engine,server}), README.md, README-zh.md
+- 附带 gotchas.md 更新: 是 (新增 3 条: utils_helpers 重定向, paperqa alias
+  生效场景, iter↔synth cycle 复活)
+- 任何遗留的兼容问题:
+  - paperqa sys.modules 别名保留（用户决策 Q3a）。它在 evoscholar 已加载后
+    才生效，正好满足 paperqa_pypdf/pymupdf 的使用场景
+```
 
 **子 Agent 报告完成时的格式**：
 

@@ -63,11 +63,7 @@ class AnswerSummary(BaseModel):
 
 
 class UsageStats(BaseModel):
-    """Statistics about resource usage during research.
-
-    Note: This model is duplicated between synthesis and iterative_search packages.
-    iterative_search/models.py re-exports from here for backward compatibility.
-    """
+    """Statistics about resource usage during research."""
 
     llm_calls: int = Field(default=0, description="Number of LLM API calls.")
     llm_prompt_tokens: int = Field(default=0, description="Total LLM prompt tokens.")

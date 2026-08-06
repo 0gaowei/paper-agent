@@ -903,8 +903,8 @@ In general, it's advisable to:
 import os
 
 from evoscholar import Settings
-from evoscholar.agents.main import agent_query
-from evoscholar.agents.search import get_directory_index
+from evoscholar.literature_qa.main import agent_query
+from evoscholar.literature_qa.search import get_directory_index
 
 
 async def amain(folder_of_papers: str | os.PathLike) -> None:
