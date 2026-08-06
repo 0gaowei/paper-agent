@@ -17,8 +17,8 @@ except ImportError as e:
         "zotero requires the 'zotero' extra for 'pyzotero'. Please:"
         " `pip install paper-qa[zotero]`."
     ) from e
-from evoscholar.paths import PAPERQA_DIR
-from evoscholar.readers import PDFParserFn
+from evoscholar.utils.paths import PAPERQA_DIR
+from evoscholar.literature_qa.core import PDFParserFn
 
 
 class ZoteroPaper(BaseModel):

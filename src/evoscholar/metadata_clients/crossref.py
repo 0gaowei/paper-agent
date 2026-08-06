@@ -22,7 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from evoscholar.types import CITATION_FALLBACK_DATA, BibTeXSource, DocDetails
+from evoscholar.literature_qa.core import CITATION_FALLBACK_DATA, BibTeXSource, DocDetails
 from evoscholar.utils import BIBTEX_MAPPING as CROSSREF_CONTENT_TYPE_TO_BIBTEX_MAPPING
 from evoscholar.utils import (
     bibtex_field_extract,

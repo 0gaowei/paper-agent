@@ -58,7 +58,7 @@ from evoscholar._ldp_shims import (
     _Memories,
     set_training_mode,
 )
-from evoscholar.prompts import (
+from evoscholar.literature_qa.core import (
     CONTEXT_INNER_PROMPT,
     CONTEXT_OUTER_PROMPT,
     answer_iteration_prompt_template,
@@ -74,8 +74,8 @@ from evoscholar.prompts import (
     summary_json_system_prompt,
     summary_prompt,
 )
-from evoscholar.readers import PDFParserFn
-from evoscholar.types import Context, ParsedMedia, ParsedText
+from evoscholar.literature_qa.core import PDFParserFn
+from evoscholar.literature_qa.core import Context, ParsedMedia, ParsedText
 from evoscholar.utils import (
     get_stable_str,
     hexdigest,
@@ -490,7 +490,7 @@ class PromptSettings(BaseModel):
     def check_post(cls, v: str | None) -> str | None:
         if v is not None:
             # kind of a hack to get list of attributes in answer
-            from evoscholar.types import PQASession
+            from evoscholar.literature_qa.core import PQASession
 
             attrs = set(PQASession.model_fields.keys())
             if not get_formatted_variables(v).issubset(attrs):

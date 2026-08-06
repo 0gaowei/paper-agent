@@ -17,7 +17,7 @@ from pydantic import (
 )
 from tenacity import RetryError
 
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.core import DocDetails
 
 from .exceptions import DOINotFoundError
 

@@ -16,9 +16,9 @@ from tenacity import (
     wait_incrementing,
 )
 
-from evoscholar.docs import Docs
+from evoscholar.literature_qa.core import DocDetails, Embeddable, Text
+from evoscholar.literature_qa.docs import Docs
 from evoscholar.settings import Settings
-from evoscholar.types import DocDetails, Embeddable, Text
 
 logger = logging.getLogger(__name__)
 

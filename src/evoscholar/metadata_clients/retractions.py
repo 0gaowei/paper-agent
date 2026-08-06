@@ -7,7 +7,7 @@ import os
 
 from pydantic import ValidationError
 
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.core import DocDetails
 
 from .client_models import DOIQuery, MetadataPostProcessor
 from .crossref import download_retracted_dataset

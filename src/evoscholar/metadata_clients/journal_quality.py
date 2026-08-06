@@ -21,7 +21,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.core import DocDetails
 
 from .client_models import JournalQuery, MetadataPostProcessor
 

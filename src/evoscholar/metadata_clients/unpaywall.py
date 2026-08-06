@@ -9,7 +9,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.core import DocDetails
 from evoscholar.utils import _get_with_retrying, strings_similarity
 
 from .client_models import DOIOrTitleBasedProvider, DOIQuery, TitleAuthorQuery

@@ -10,7 +10,7 @@ import httpx_aiohttp
 from lmi.utils import gather_with_concurrency
 from pydantic import BaseModel, ConfigDict, Field
 
-from evoscholar.types import Doc, DocDetails
+from evoscholar.literature_qa.core import Doc, DocDetails
 
 from .academic_search import AcademicSearchClient, AcademicSearchProvider
 from .client_models import MetadataPostProcessor, MetadataProvider

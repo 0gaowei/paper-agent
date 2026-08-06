@@ -16,7 +16,7 @@ from tenacity import (
     stop_after_attempt,
 )
 
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.core import DocDetails
 from evoscholar.utils import BIBTEX_MAPPING, mutate_acute_accents, strings_similarity
 
 from .client_models import DOIOrTitleBasedProvider, DOIQuery, TitleAuthorQuery

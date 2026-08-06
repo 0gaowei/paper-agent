@@ -9,8 +9,8 @@ from aviary.core import Message
 from lmi import LiteLLMModel, LLMModel
 from rich.table import Table
 
-from evoscholar.docs import Docs
-from evoscholar.types import DocDetails
+from evoscholar.literature_qa.docs import Docs
+from evoscholar.literature_qa.core import DocDetails
 
 from .models import AnswerResponse
 

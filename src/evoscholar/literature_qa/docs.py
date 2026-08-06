@@ -22,15 +22,15 @@ from lmi.utils import gather_with_concurrency
 from pydantic import BaseModel, ConfigDict, Field
 
 from evoscholar.metadata_clients import DEFAULT_CLIENTS, DocMetadataClient
-from evoscholar.core import llm_parse_json, map_fxn_summary
-from evoscholar.llms import (
+from evoscholar.literature_qa.core import llm_parse_json, map_fxn_summary
+from evoscholar.utils.llms import (
     NumpyVectorStore,
     VectorStore,
 )
-from evoscholar.prompts import CANNOT_ANSWER_PHRASE, EMPTY_CONTEXTS
-from evoscholar.readers import read_doc
+from .prompts import CANNOT_ANSWER_PHRASE, EMPTY_CONTEXTS
+from .readers import read_doc
 from evoscholar.settings import MaybeSettings, get_settings
-from evoscholar.types import Doc, DocDetails, DocKey, PQASession, Text
+from .types import Doc, DocDetails, DocKey, PQASession, Text
 from evoscholar.utils import (
     citation_to_docname,
     maybe_is_html,

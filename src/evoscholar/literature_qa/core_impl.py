@@ -9,8 +9,8 @@ from aviary.core import Message
 from lmi import LLMModel, LLMResult
 from pydantic import JsonValue
 
-from evoscholar.prompts import text_with_tables_prompt_template
-from evoscholar.types import Context, Text, create_multimodal_message
+from .prompts import text_with_tables_prompt_template
+from .types import Context, Text, create_multimodal_message
 from evoscholar.utils import extract_score, strip_citations
 
 logger = logging.getLogger(__name__)

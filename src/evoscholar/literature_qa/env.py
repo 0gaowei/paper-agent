@@ -17,13 +17,13 @@ from aviary.env import ENV_REGISTRY
 from aviary.utils import MultipleChoiceQuestion
 from lmi import EmbeddingModel, LiteLLMModel
 
-from evoscholar.docs import Docs
+from evoscholar.literature_qa.docs import Docs
 from evoscholar.settings import Settings
 from evoscholar.sources.clinical_trials import (
     CLINICAL_TRIALS_BASE,
     partition_clinical_trials_by_source,
 )
-from evoscholar.types import PQASession
+from evoscholar.literature_qa.core import PQASession
 from evoscholar.utils import get_year
 
 from .tools import (

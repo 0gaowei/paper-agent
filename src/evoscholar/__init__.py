@@ -12,14 +12,14 @@ from lmi import (
 
 from evoscholar.agents import ask
 from evoscholar.agents.main import agent_query
-from evoscholar.docs import Docs, PQASession
-from evoscholar.llms import (
+from evoscholar.literature_qa.docs import Docs
+from evoscholar.literature_qa.core import Context, Doc, DocDetails, PQASession, Text
+from evoscholar.utils.llms import (
     NumpyVectorStore,
     QdrantVectorStore,
     VectorStore,
 )
 from evoscholar.settings import Settings, get_settings
-from evoscholar.types import Context, Doc, DocDetails, Text
 from evoscholar.version import __version__
 
 __all__ = [

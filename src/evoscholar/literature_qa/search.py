@@ -41,9 +41,9 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from evoscholar.docs import Docs
+from evoscholar.literature_qa.docs import Docs
 from evoscholar.settings import IndexSettings, get_settings
-from evoscholar.types import VAR_MATCH_LOOKUP, DocDetails
+from evoscholar.literature_qa.core import VAR_MATCH_LOOKUP, DocDetails
 from evoscholar.utils import ImpossibleParsingError, clean_possessives, hexdigest
 
 from .models import SupportsPickle

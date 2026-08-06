@@ -123,8 +123,8 @@ class _EvidenceAdapter:
     """
 
     def __init__(self, papers: Sequence[AcademicPaper]) -> None:
-        from evoscholar.docs import Docs
-        from evoscholar.types import DocDetails, Text
+        from evoscholar.literature_qa.docs import Docs
+        from evoscholar.literature_qa.core import DocDetails, Text
 
         self.docs = Docs()
         self.paper_by_id = {paper.stable_id: paper for paper in papers}

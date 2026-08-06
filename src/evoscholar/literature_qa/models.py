@@ -12,7 +12,7 @@ from aviary.core import Message
 from lmi import LiteLLMModel, LLMModel
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from evoscholar.types import PQASession
+from evoscholar.literature_qa.core import PQASession
 from evoscholar.version import __version__
 
 logger = logging.getLogger(__name__)

@@ -16,8 +16,35 @@ from evoscholar.utils import pqa_directory, run_or_ensure, setup_default_logs
 from evoscholar.version import __version__
 
 from .main import agent_query, index_search
+from .docs import Docs
+from .core import PQASession, Doc, Text, Context, DocDetails
 from .models import AnswerResponse
 from .search import SearchIndex, get_directory_index
+from .types import Embeddable
+
+__all__ = [
+    "agent_query",
+    "agent_query",
+    "AnswerResponse",
+    "build_index",
+    "configure_cli_logging",
+    "Context",
+    "Doc",
+    "DocDetails",
+    "Docs",
+    "Embeddable",
+    "index_search",
+    "is_running_under_cli",
+    "main",
+    "PQASession",
+    "save_settings",
+    "SearchIndex",
+    "search_query",
+    "Settings",
+    "set_up_rich_handler",
+    "Text",
+    "ask",
+]
 
 logger = logging.getLogger(__name__)
 

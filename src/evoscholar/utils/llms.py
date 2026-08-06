@@ -1,15 +1,18 @@
+"""Vector store implementations and embedding model factory.
+
+This module contains shared vector store classes (NumpyVectorStore, QdrantVectorStore)
+and the embedding_model_factory function. These are used by multiple packages (literature_qa,
+paper_ranker) so they live in utils/.
+"""
+from __future__ import annotations
+
 import asyncio
 import itertools
 import logging
 import threading
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import (
-    Callable,
-    Iterable,
-    Sequence,
-    Sized,
-)
+from collections.abc import Callable, Iterable, Sequence, Sized
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -22,23 +25,14 @@ from lmi import (
     SentenceTransformerEmbeddingModel,
     SparseEmbeddingModel,
 )
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import override
-
-from evoscholar.types import AUTOPOPULATE_VALUE, Doc, Text
 
 if TYPE_CHECKING:
     from qdrant_client.http.models import Record
 
-    from evoscholar.docs import Docs
-
 try:
-    from qdrant_client import AsyncQdrantClient, models
+    from qdrant_client import AsyncQdrantClient, models as qdrant_models
 
     qdrant_installed = True
 except ImportError:
@@ -57,7 +51,6 @@ class VectorStore(BaseModel, ABC):
 
     model_config = ConfigDict(extra="forbid")
 
-    # can be tuned for different tasks
     mmr_lambda: float = Field(
         default=1.0,
         ge=0.0,
@@ -116,26 +109,12 @@ class VectorStore(BaseModel, ABC):
         embedding_model: EmbeddingModel,
         partitioning_fn: Callable[[Embeddable], int] | None = None,
     ) -> tuple[Sequence[Embeddable], list[float]]:
-        """Vectorized implementation of Maximal Marginal Relevance (MMR) search.
-
-        Args:
-            query: Query vector.
-            k: Number of results to return.
-            fetch_k: Number of results to fetch from the vector store.
-            embedding_model: model used to embed the query
-            partitioning_fn: optional function to partition the documents into
-                different groups, performing MMR within each group.
-
-        Returns:
-            List of tuples (doc, score) of length k.
-        """
+        """Vectorized implementation of Maximal Marginal Relevance (MMR) search."""
         if fetch_k < k:
             raise ValueError("fetch_k must be greater or equal to k")
 
         if partitioning_fn is None:
-            texts, scores = await self.similarity_search(
-                query, fetch_k, embedding_model
-            )
+            texts, scores = await self.similarity_search(query, fetch_k, embedding_model)
         else:
             texts, scores = await self.partitioned_similarity_search(
                 query, fetch_k, embedding_model, partitioning_fn
@@ -159,7 +138,7 @@ class VectorStore(BaseModel, ABC):
                 self.mmr_lambda * np_scores
                 - (1 - self.mmr_lambda) * max_sim_to_selected
             )
-            mmr_scores[selected_indices] = -np.inf  # Exclude already selected documents
+            mmr_scores[selected_indices] = -np.inf
 
             max_mmr_index = mmr_scores.argmax()
             selected_indices.append(max_mmr_index)
@@ -170,7 +149,7 @@ class VectorStore(BaseModel, ABC):
         ]
 
 
-class NumpyVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
+class NumpyVectorStore(VectorStore):
     texts: list[Embeddable] = Field(default_factory=list)
     _embeddings_matrix: np.ndarray | None = None
     _texts_filter: np.ndarray | None = None
@@ -215,14 +194,11 @@ class NumpyVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         texts: list[Sequence[Embeddable]] = []
 
         text_partitions = np.array([partitioning_fn(t) for t in self.texts])
-        # CPU bound so replacing w a gather wouldn't get us anything
-        # plus we need to reset self._texts_filter each iteration
         for partition in np.unique(text_partitions):
             self._texts_filter = text_partitions == partition
             _texts, _scores = await self.similarity_search(query, k, embedding_model)
             texts.append(_texts)
             scores.append(_scores)
-        # reset the filter after running
         self._texts_filter = None
 
         return (
@@ -245,11 +221,8 @@ class NumpyVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         if k == 0:
             return [], []
 
-        # this will only affect models that embedding prompts
         embedding_model.set_mode(EmbeddingModes.QUERY)
-
         np_query = np.array((await embedding_model.embed_documents([query]))[0])
-
         embedding_model.set_mode(EmbeddingModes.DOCUMENT)
 
         embedding_matrix = self._embeddings_matrix
@@ -264,9 +237,6 @@ class NumpyVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
             np_query.reshape(1, -1), embedding_matrix
         )[0]
         similarity_scores = np.nan_to_num(similarity_scores, nan=-np.inf)
-        # minus so descending
-        # we could use arg-partition here
-        # but a lot of algorithms expect a sorted list
         sorted_indices = np.argsort(-similarity_scores)
         return (
             [self.texts[i] for i in original_indices[sorted_indices][:k]],
@@ -274,7 +244,7 @@ class NumpyVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         )
 
 
-class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
+class QdrantVectorStore(VectorStore):
     client: Any = Field(
         default=None,
         description=(
@@ -291,7 +261,7 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                _ = loop.create_task(self.aclose())  # noqa: RUF006
+                _ = loop.create_task(self.aclose())
             else:
                 loop.run_until_complete(self.aclose())
         except Exception as e:
@@ -304,7 +274,6 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
     def __eq__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
-
         return (
             self.texts_hashes == other.texts_hashes
             and self.mmr_lambda == other.mmr_lambda
@@ -330,7 +299,6 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
             )
 
         if not self.client:
-            # Defaults to the Python based in-memory implementation.
             self.client = AsyncQdrantClient(location=":memory:")
 
         return self
@@ -341,9 +309,8 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
     @override
     def clear(self) -> None:
         """Synchronous clear method that matches parent class."""
-        super().clear()  # Clear the base class attributes first
+        super().clear()
 
-        # Create a new event loop in a new thread to avoid nested loop issues
         def run_async():
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
@@ -370,9 +337,9 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         texts_list = list(texts)
 
         if texts_list and not await self._collection_exists():
-            params = models.VectorParams(
+            params = qdrant_models.VectorParams(
                 size=len(cast("Sized", texts_list[0].embedding)),
-                distance=models.Distance.COSINE,
+                distance=qdrant_models.Distance.COSINE,
             )
 
             await self.client.create_collection(
@@ -395,7 +362,7 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         await self.client.upsert(
             collection_name=self.collection_name,
             points=[
-                models.PointStruct(
+                qdrant_models.PointStruct(
                     id=some_id,
                     payload=some_payload,
                     vector=some_vector,
@@ -428,6 +395,9 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
             )
         ).points
 
+        # Import Text at runtime to avoid circular import
+        from evoscholar.literature_qa.core import Text
+
         return (
             [
                 Text(
@@ -450,7 +420,7 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
         batch_size: int = 100,
         max_concurrent_requests: int = 5,
     ) -> "Docs":
-        from evoscholar.docs import Docs  # Avoid circular imports
+        from evoscholar.literature_qa.core import Docs
 
         vectorstore = cls(
             client=client, collection_name=collection_name, vector_name=vector_name
@@ -469,7 +439,7 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
                     collection_name=collection_name,
                     limit=batch_size,
                     offset=offset,
-                    with_payload=True,  # noqa: FURB120
+                    with_payload=True,
                     with_vectors=True,
                 )
                 all_points.extend(points[0])
@@ -479,6 +449,9 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
             for offset in range(0, total_points, batch_size)
         ]
         await asyncio.gather(*tasks)
+
+        # Import at runtime to avoid circular import
+        from evoscholar.literature_qa.core import Doc, Text
 
         for point in all_points:
             try:
@@ -495,7 +468,7 @@ class QdrantVectorStore(VectorStore):  # noqa: PLW1641  # TODO: add __hash__
                         docname=doc_data.get("docname", ""),
                         citation=doc_data.get("citation", ""),
                         dockey=doc_data["dockey"],
-                        content_hash=doc_data.get("content_hash", AUTOPOPULATE_VALUE),
+                        content_hash=doc_data.get("content_hash", ""),
                     )
                     docs.docnames.add(doc_data.get("docname", ""))
 
@@ -531,16 +504,10 @@ def embedding_model_factory(embedding: str, **kwargs) -> EmbeddingModel:
     - SentenceTransformer models prefixed with "st-" (e.g., "st-multi-qa-MiniLM-L6-cos-v1")
     - LiteLLM models (default if no prefix is provided)
     - Hybrid embeddings prefixed with "hybrid-", contains a sparse and a dense model
-
-    Args:
-        embedding: The embedding model identifier. Supports prefixes like "st-" for SentenceTransformer
-                   and "hybrid-" for combining multiple embedding models.
-        **kwargs: Additional keyword arguments for the embedding model.
     """
-    embedding = embedding.strip()  # Remove any leading/trailing whitespace
+    embedding = embedding.strip()
 
     if embedding.startswith("hybrid-"):
-        # Extract the component embedding identifiers after "hybrid-"
         dense_name = embedding[len("hybrid-") :]
 
         if not dense_name:
@@ -548,14 +515,12 @@ def embedding_model_factory(embedding: str, **kwargs) -> EmbeddingModel:
                 "Hybrid embedding must contain at least one component embedding."
             )
 
-        # Recursively create each component embedding model
         dense_model = embedding_model_factory(dense_name, **kwargs)
         sparse_model = SparseEmbeddingModel(**kwargs)
 
         return HybridEmbeddingModel(models=[dense_model, sparse_model])
 
     if embedding.startswith("st-"):
-        # Extract the SentenceTransformer model name after "st-"
         model_name = embedding[len("st-") :].strip()
         if not model_name:
             raise ValueError(
@@ -568,7 +533,6 @@ def embedding_model_factory(embedding: str, **kwargs) -> EmbeddingModel:
         )
 
     if embedding.startswith("litellm-"):
-        # Extract the LiteLLM model name after "litellm-"
         model_name = embedding[len("litellm-") :].strip()
         if not model_name:
             raise ValueError("model name must be specified after 'litellm-'.")
@@ -581,5 +545,4 @@ def embedding_model_factory(embedding: str, **kwargs) -> EmbeddingModel:
     if embedding == "sparse":
         return SparseEmbeddingModel(**kwargs)
 
-    # Default to LiteLLMEmbeddingModel if no special prefix is found
     return LiteLLMEmbeddingModel(name=embedding, config=kwargs)

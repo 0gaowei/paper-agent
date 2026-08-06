@@ -14,7 +14,7 @@ import httpx
 from lmi.utils import SEMANTIC_SCHOLAR_KEY_HEADER
 from tenacity import before_sleep_log, retry, retry_if_exception, stop_after_attempt
 
-from evoscholar.types import BibTeXSource, DocDetails
+from evoscholar.literature_qa.core import BibTeXSource, DocDetails
 from evoscholar.utils import (
     _get_with_retrying,
     clean_upbibtex,

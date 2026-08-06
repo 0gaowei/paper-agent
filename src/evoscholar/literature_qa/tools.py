@@ -14,10 +14,10 @@ from aviary.core import Message, ToolRequestMessage
 from lmi import Embeddable, EmbeddingModel, LiteLLMModel
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from evoscholar.docs import Docs
+from evoscholar.literature_qa.docs import Docs
 from evoscholar.settings import Settings
 from evoscholar.sources.clinical_trials import add_clinical_trials_to_docs
-from evoscholar.types import Context, DocDetails, PQASession
+from evoscholar.literature_qa.core import Context, DocDetails, PQASession
 
 from .search import get_directory_index
 

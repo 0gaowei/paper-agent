@@ -14,7 +14,7 @@ from aviary.core import is_coroutine_callable
 from html2text import __version__ as html2text_version
 from html2text import html2text
 
-from evoscholar.types import (
+from .types import (
     ChunkMetadata,
     Doc,
     ParsedMedia,
