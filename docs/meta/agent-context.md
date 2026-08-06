@@ -199,12 +199,12 @@ pytest tests/ -x -q --tb=short
 | D | 已完成 | 716a5c9 (Commit 6) | synthesis 包提取 + SSE 事件拆分 |
 | E | 已完成 | 539c8b7 (Commit 8) | 根目录文件 → 各包 core.py + utils/ |
 | F | 已完成 | a2b4c50 (Commit 9) | settings 下沉 + Server Settings 合并 |
-| G | 已完成 | fc4b6d3 (Commit 10) | 清理所有 compat shim + paperqa alias 保留 |
+| G | 已完成 | 41cb9f9 (Commit 10) | 清理所有 compat shim + paperqa alias 保留 |
 
 **Batch G 子 Agent 报告**：
 ```
 Batch G 完成
-- Commit 10: fc4b6d3  refactor: 删除所有兼容垫片（Commit 10）
+- Commit 10: 41cb9f9  refactor: 删除所有兼容垫片（Commit 10）
 - 验证:
   - 旧路径失效: OK (17 个旧 import path 全部 ImportError)
   - 新路径正常: OK (literature_qa / iterative_search / paper_ranker / synthesis /
