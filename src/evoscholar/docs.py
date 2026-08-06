@@ -21,7 +21,7 @@ from lmi.types import set_llm_session_ids
 from lmi.utils import gather_with_concurrency
 from pydantic import BaseModel, ConfigDict, Field
 
-from evoscholar.clients import DEFAULT_CLIENTS, DocMetadataClient
+from evoscholar.metadata_clients import DEFAULT_CLIENTS, DocMetadataClient
 from evoscholar.core import llm_parse_json, map_fxn_summary
 from evoscholar.llms import (
     NumpyVectorStore,

@@ -13,7 +13,7 @@ import httpx
 from aviary.core import Message
 from lmi import LLMResult, embedding_model_factory
 
-from ..clients.academic_search import AcademicSearchClient, AcademicSearchProvider
+from ..metadata_clients.academic_search import AcademicSearchClient, AcademicSearchProvider
 from ..docs import Docs
 from ..types import DocDetails, PQASession, Text
 from .callbacks import NoOpProgressCallback, ResearchProgressCallback
