@@ -196,7 +196,7 @@ pytest tests/ -x -q --tb=short
 | A | 已完成 | c1abafb (Commit 0) / 1ca5bb4 (Commit 1) | 包重命名 + 骨架创建 |
 | B | 已完成 | afba223 (Commit 2) / a462e43 (Commit 3) | clients→metadata_clients + query_understanding 提取 |
 | C | 已完成 | f453d7c (Commit 4) / a677bc5 (Commit 5) / a38731a (Commit 7) | iterative_search + paper_ranker + literature_qa 提取 |
-| D | 待执行 | — | — |
+| D | 已完成 | 716a5c9 (Commit 6) | synthesis 包提取 + SSE 事件拆分 |
 | E | 待执行 | — | — |
 | F | 待执行 | — | — |
 | G | 待执行 | — | — |

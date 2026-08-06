@@ -204,6 +204,23 @@ disable lint / catch 异常 / 注释掉测试——都要立即删掉或记录�
 **根因**：git porcelain 格式：`第二列`=工作区，第一列`M` = index staged；`M `（第一列有 M）= staged 且 dirty，` M`（第二列有 M）= 仅工作区 dirty。本项目多数文件都是 ` M`（仅工作区），但 index.ts/tsconfig 因为之前 session 已经 `git add` 过所以是 `M `（staged），被混入了本应另开的 commit
 **解法**：commit 前用 `git diff --staged --stat` 确认 staged 内容；发现无关文件在 staged 区，用 `git reset HEAD~1 -- path` 移出后 `git checkout HEAD~1 -- path` 恢复工作区
 
+### Commit 6 循环导入链：iterative_search ↔ synthesis ↔ research ↔ iterative_search
+
+**触发条件**：创建 `synthesis` 包并从 `iterative_search/engine.py` 抽出 `_build_evidence_and_answer` 后
+**现象**：`ImportError: cannot import name 'AcademicSearchClient' from partially initialized module` 或 `cannot import name 'RelevanceTier' from partially initialized module`
+**根因**：循环导入链
+  1. `evoscholar/__init__.py` → `agents/__init__.py` → `literature_qa/main.py` → `docs.py` → `metadata_clients/__init__.py` → `academic_search.py` → `research/__init__.py` → `iterative_search/__init__.py` → `iterative_search/engine.py`
+  2. `engine.py` 顶层 import `from evoscholar.synthesis.builder import build_evidence_and_answer`
+  3. `synthesis/builder.py` 顶层 import `from evoscholar.iterative_search.models import AcademicPaper`
+  4. `iterative_search/models.py` 顶层 import `from evoscholar.research.models import RelevanceTier`
+  5. `research/models.py` 顶层 import `from evoscholar.iterative_search.models import ...` → 循环！
+**解法**：
+  - 将 `iterative_search/models.py` 中 `RelevanceTier` 的 import 改为直接引用 `evoscholar.paper_ranker.relevance`
+  - 将 `iterative_search/engine.py` 中 `AcademicSearchClient` 的 import 改为在 `__init__` 方法内延迟 import（避免顶层循环）
+  - 将 `synthesis/builder.py` 中 `AcademicPaper` 的 import 放入 `TYPE_CHECKING` 块（仅类型检查用）
+  - 使用 `__getattr__` 在 `synthesis/__init__.py` 中惰性导入 `build_evidence_and_answer`
+**教训**：跨包重构时先用 `TYPE_CHECKING` 包裹类型引用，避免顶层循环；业务代码（`AcademicSearchClient`）用延迟 import
+
 ---
 
 ## 一句话总结
