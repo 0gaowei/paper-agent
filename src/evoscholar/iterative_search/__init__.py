@@ -14,17 +14,22 @@ from typing import Any
 from .engine import ResearchEngine
 from .models import (
     AcademicPaper,
+    CitationEdge,
     ResearchSession,
     SearchResult,
     SearchRound,
     StopReason,
-    CitationEdge,
 )
 from .callbacks import NoOpProgressCallback, ResearchProgressCallback
 
+# Re-export synthesis types for backward compatibility
+from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet, UsageStats
+
 __all__ = [
     "AcademicPaper",
+    "AnswerSummary",
     "CitationEdge",
+    "EvidenceSnippet",
     "NoOpProgressCallback",
     "ResearchEngine",
     "ResearchProgressCallback",
@@ -32,6 +37,7 @@ __all__ = [
     "SearchResult",
     "SearchRound",
     "StopReason",
+    "UsageStats",
 ]
 
 

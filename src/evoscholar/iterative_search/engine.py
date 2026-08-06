@@ -1,78 +1,54 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable, Sequence
-from contextlib import suppress
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import httpx
-from aviary.core import Message
-from lmi import LLMResult, embedding_model_factory
+from lmi import embedding_model_factory
 
-from ..metadata_clients.academic_search import AcademicSearchClient, AcademicSearchProvider
-from ..docs import Docs
-from ..types import DocDetails, PQASession, Text
+from evoscholar.query_understanding import analyze_and_expand_query
+from evoscholar.paper_ranker.relevance import RelevanceTier
+from evoscholar.research.ranking import ascore_papers, rank_with_mmr, score_papers
+
 from .callbacks import NoOpProgressCallback, ResearchProgressCallback
 from .models import (
     AcademicPaper,
-    AnswerSummary,
     CitationEdge,
-    EvidenceSnippet,
     ResearchSession,
     SearchResult,
     SearchRound,
     StopReason,
     UsageStats,
 )
-from evoscholar.query_understanding import analyze_and_expand_query
-from evoscholar.research.models import RelevanceTier
-from evoscholar.research.ranking import ascore_papers, rank_with_mmr, score_papers
 
 if TYPE_CHECKING:
-    pass
-
-_T = TypeVar("_T")
-
-
-def _response_text(response: Any) -> str:
-    if isinstance(response, str):
-        return response
-    if isinstance(response, LLMResult):
-        return response.text or ""
-    if isinstance(response, dict):
-        if isinstance(response.get("content"), str):
-            return response["content"]
-        choices = response.get("choices") or []
-        if choices:
-            return str((choices[0].get("message") or {}).get("content") or "")
-    if isinstance(getattr(response, "text", None), str):
-        return response.text
-    choices = getattr(response, "choices", None) or []
-    if choices:
-        return str(getattr(getattr(choices[0], "message", None), "content", "") or "")
-    return str(response)
-
-
-def _usage_value(usage: Any, *names: str) -> int:
-    for name in names:
-        value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
-        if value is not None:
-            return int(value)
-    return 0
+    from evoscholar.synthesis.builder import build_evidence_and_answer
+    from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet
+    from ..metadata_clients.academic_search import AcademicSearchProvider
 
 
 class _TrackedLLMAdapter:
-    """Expose PaperQA's call_single API around either supported LLM interface."""
+    """Expose PaperQA's call_single API around either supported LLM interface.
+
+    This adapter is used in query understanding (before synthesis) to track
+    LLM usage. The usage is accumulated into the session's UsageStats.
+    """
 
     def __init__(self, delegate: Any, usage: UsageStats) -> None:
+        import inspect
+        from lmi import LLMResult
+
         self.delegate = delegate
         self.usage = usage
 
-    async def call_single(self, messages: Any, **kwargs: Any) -> LLMResult:
+    async def call_single(self, messages: Any, **kwargs: Any) -> Any:
+        import inspect
+        from lmi import LLMResult
+
         if hasattr(self.delegate, "call_single"):
             response = self.delegate.call_single(messages=messages, **kwargs)
         elif hasattr(self.delegate, "acomplete"):
@@ -95,13 +71,18 @@ class _TrackedLLMAdapter:
             self.usage.llm_cost_usd += response.cost
             return response
 
+        def _usage_value_inner(usage: Any, *names: str) -> int:
+            for name in names:
+                value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+                if value is not None:
+                    return int(value)
+            return 0
+
         raw_usage = (
             response.get("usage") if isinstance(response, dict) else getattr(response, "usage", None)
         )
-        prompt_tokens = _usage_value(raw_usage, "prompt_tokens", "input_tokens")
-        completion_tokens = _usage_value(
-            raw_usage, "completion_tokens", "output_tokens"
-        )
+        prompt_tokens = _usage_value_inner(raw_usage, "prompt_tokens", "input_tokens")
+        completion_tokens = _usage_value_inner(raw_usage, "completion_tokens", "output_tokens")
         hidden = getattr(response, "_hidden_params", {}) or {}
         cost = float(hidden.get("response_cost") or 0.0)
         self.usage.llm_prompt_tokens += prompt_tokens
@@ -109,17 +90,42 @@ class _TrackedLLMAdapter:
         self.usage.llm_cost_usd += cost
         return LLMResult(
             model=str(getattr(self.delegate, "name", "research-llm")),
-            text=_response_text(response),
+            text=self._response_text(response),
             prompt_count=prompt_tokens,
             completion_count=completion_tokens,
             cost=cost,
         )
 
+    def _response_text(self, response: Any) -> str:
+        if isinstance(response, str):
+            return response
+        if isinstance(response, LLMResult):
+            return response.text or ""
+        if isinstance(response, dict):
+            if isinstance(response.get("content"), str):
+                return response["content"]
+            choices = response.get("choices") or []
+            if choices:
+                return str((choices[0].get("message") or {}).get("content") or "")
+        if isinstance(getattr(response, "text", None), str):
+            return response.text
+        choices = getattr(response, "choices", None) or []
+        if choices:
+            return str(getattr(getattr(choices[0], "message", None), "content", "") or "")
+        return str(response)
+
 
 class _EvidenceAdapter:
-    """Inject paper abstracts into Docs without touching its file/PDF ingestion path."""
+    """Inject paper abstracts into Docs without touching its file/PDF ingestion path.
+
+    This adapter is used in the fallback path (when synthesis fails) to build
+    evidence from paper abstracts.
+    """
 
     def __init__(self, papers: Sequence[AcademicPaper]) -> None:
+        from evoscholar.docs import Docs
+        from evoscholar.types import DocDetails, Text
+
         self.docs = Docs()
         self.paper_by_id = {paper.stable_id: paper for paper in papers}
         for paper in papers:
@@ -152,10 +158,10 @@ class _EvidenceAdapter:
         year = str(paper.year) if paper.year else "n.d."
         return f"{authors}. {paper.title or paper.stable_id}. {year}."
 
-    async def aget_evidence(self, *args: Any, **kwargs: Any) -> PQASession:
+    async def aget_evidence(self, *args: Any, **kwargs: Any) -> Any:
         return await self.docs.aget_evidence(*args, **kwargs)
 
-    async def aquery(self, *args: Any, **kwargs: Any) -> PQASession:
+    async def aquery(self, *args: Any, **kwargs: Any) -> Any:
         return await self.docs.aquery(*args, **kwargs)
 
 
@@ -184,12 +190,16 @@ class ResearchEngine:
         self._owns_http_client = False
 
         if providers is None:
+            from ..metadata_clients.academic_search import AcademicSearchClient
+
             self._http_client = httpx.AsyncClient()
             self._owns_http_client = True
             self.provider: AcademicSearchProvider = AcademicSearchClient(
                 self._http_client, provider_names=settings.research.providers
             )
         elif isinstance(providers, Sequence) and not isinstance(providers, (str, bytes)):
+            from ..metadata_clients.academic_search import AcademicSearchClient
+
             self._http_client = httpx.AsyncClient()
             self._owns_http_client = True
             self.provider = AcademicSearchClient(
@@ -274,10 +284,10 @@ class ResearchEngine:
 
     async def _call_provider(
         self,
-        operation: Callable[[], Awaitable[_T]],
+        operation: Callable[[], Awaitable[Any]],
         session: ResearchSession,
         baseline: Counter[str],
-    ) -> _T:
+    ) -> Any:
         has_internal_counts = bool(getattr(self.provider, "call_counts", None) is not None)
         if not has_internal_counts:
             name = str(getattr(self.provider, "name", type(self.provider).__name__))
@@ -385,76 +395,18 @@ class ResearchEngine:
         progress_callback: ResearchProgressCallback | None = None,
         session_id: str | None = None,
     ) -> None:
-        papers = [paper for paper in session.final_papers if paper.abstract]
-        if not papers:
-            return
-        adapter = _EvidenceAdapter(papers)
-        evidence_settings = self.settings.model_copy(deep=True)
-        evidence_settings.answer.evidence_retrieval = False
-        evidence_settings.answer.evidence_skip_summary = True
-        evidence_settings.answer.get_evidence_if_no_contexts = False
-        tracked_llm = _TrackedLLMAdapter(self.llm_model, session.usage)
-
-        pqa_session = await adapter.aget_evidence(
-            session.query,
-            settings=evidence_settings,
+        """Build evidence and answer by delegating to synthesis.builder."""
+        evidence, answer = await build_evidence_and_answer(
+            papers=session.final_papers,
+            query=session.query,
+            settings=self.settings,
+            llm_model=self.llm_model,
             embedding_model=self.embedding_model,
-            summary_llm_model=tracked_llm,
+            session_id=session_id,
+            progress_callback=progress_callback,
         )
-        session.evidence = [
-            EvidenceSnippet(
-                paper_id=str(context.text.doc.dockey),
-                paper_title=getattr(context.text.doc, "title", None),
-                content=context.context,
-                relevance_score=max(0.0, min(1.0, context.score / 10.0)),
-                subquery_addressed=context.question,
-                citation=context.text.doc.citation,
-                provider=(
-                    adapter.paper_by_id.get(str(context.text.doc.dockey)).source
-                    if adapter.paper_by_id.get(str(context.text.doc.dockey))
-                    else "unknown"
-                ),
-            )
-            for context in pqa_session.contexts
-        ]
-        if progress_callback:
-            await progress_callback.on_evidence_extraction_done(
-                session_id, len(session.evidence)
-            )
-            await progress_callback.on_answer_synthesis_start(
-                session_id, "Synthesizing answer from evidence..."
-            )
-        answered = await adapter.aquery(
-            pqa_session,
-            settings=evidence_settings,
-            llm_model=tracked_llm,
-            summary_llm_model=tracked_llm,
-            embedding_model=self.embedding_model,
-        )
-        cited_ids = list(
-            dict.fromkeys(str(context.text.doc.dockey) for context in answered.contexts)
-        )
-        citations = list(
-            dict.fromkeys(context.text.doc.citation for context in answered.contexts)
-        )
-        subqueries = (
-            [subquery.query for subquery in session.query_understanding.subqueries]
-            if session.query_understanding
-            else [session.query]
-        )
-        session.answer = AnswerSummary(
-            answer=answered.answer or answered.raw_answer,
-            subqueries_covered=subqueries,
-            evidence_used=len(session.evidence),
-            papers_cited=cited_ids,
-            citations=citations,
-            raw_answer=answered.raw_answer,
-            has_successful_answer=answered.has_successful_answer,
-        )
-        if progress_callback:
-            await progress_callback.on_answer_synthesis_done(
-                session_id, len(session.answer.answer) if session.answer else 0
-            )
+        session.evidence = evidence
+        session.answer = answer
 
     async def arun(
         self,

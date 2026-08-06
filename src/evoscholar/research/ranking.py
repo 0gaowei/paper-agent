@@ -1,4 +1,17 @@
-"""Shim module for backwards compatibility. Import from evoscholar.paper_ranker instead."""
+"""Shim module for backwards compatibility. Import from evoscholar.paper_ranker instead.
+
+.. deprecated::
+    Import directly from ``evoscholar.paper_ranker`` instead.
+"""
+from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "evoscholar.research.ranking is deprecated, use evoscholar.paper_ranker",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from evoscholar.paper_ranker.ranker import *
 

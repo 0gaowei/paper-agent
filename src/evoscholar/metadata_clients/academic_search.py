@@ -12,7 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 import httpx
 from tenacity import AsyncRetrying
 
-from ..research.models import AcademicPaper, SearchResult
+from ..iterative_search.models import AcademicPaper, SearchResult
 from ..types import DocDetails
 from .openalex import openalex_get_doc, openalex_referenced_works, openalex_search
 from .semantic_scholar import s2_get_doc_details, s2_paper_references, s2_topic_search
