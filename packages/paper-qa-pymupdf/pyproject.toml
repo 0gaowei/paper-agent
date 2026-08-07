@@ -38,8 +38,6 @@ dev = [
     "PyMuPDF>=1.27.2.2",  # Lower pin for typing fix on Page.find_tables
     "fhlmi>=0.39",  # Pin for bytes_to_string
     "paper-qa>=5.23",  # Pin for PDFParserFn
-    "pytest-asyncio",
-    "pytest>=8",  # Pin to keep recent
 ]
 
 [tool.ruff]

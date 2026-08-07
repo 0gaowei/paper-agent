@@ -46,11 +46,6 @@ dev = [
     "httpx-aiohttp",
     "paper-qa-nemotron[sagemaker,typing]",
     "paper-qa>=5.23",  # Pin for PDFParserFn
-    "pytest-asyncio",
-    "pytest-recording",
-    "pytest-rerunfailures",
-    "pytest>=9",  # Pin for pytest-subtests upstreaming
-    "vcrpy>=8",  # Pin for dropping unused requests support
 ]
 sagemaker = ["aiobotocore"]
 typing = [

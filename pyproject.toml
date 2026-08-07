@@ -71,20 +71,10 @@ dev = [
     "pydantic~=2.11",  # Pin for start of model_fields deprecation
     "pylint-per-file-ignores",
     "pylint-pydantic",
-    "pytest-asyncio",
-    "pytest-recording",
-    "pytest-rerunfailures",
-    "pytest-subtests",
-    "pytest-sugar",
-    "pytest-timeout",
-    "pytest-timer[colorama]",
-    "pytest-xdist",
-    "pytest>=8",  # Pin to keep recent
     "python-dotenv",
     "pyzotero>=1.11.0",  # Lower pin for typing fix on Zotero.dump in https://github.com/urschrei/pyzotero/issues/298
-    "refurb>=2",  # Pin to keep recent
+    "refurb>=2",  # Pin for recent
     "typeguard",
-    "vcrpy>=8",  # Pin for dropping unused requests support
 ]
 docling = ["paper-qa-docling"]
 image = ["fhlmi[image]"]
@@ -143,10 +133,7 @@ check-hidden = true
 ignore-words-list = "aadd,astroid,flate,ser,ECT"
 skip = [
     "docs/2024-10-16_litqa2-splits.json5",
-    "packages/paper-qa-nemotron/tests/cassettes/*",
     "src/evoscholar/clients/client_data/*",
-    "tests/cassettes/*",
-    "tests/stub_data/*",
 ]
 
 [tool.markdown_toc_creator]
@@ -221,7 +208,6 @@ module = [
     "pymupdf",  # SEE: https://github.com/pymupdf/PyMuPDF/issues/2883
     "pypdfium2",  # SEE: https://github.com/pypdfium2-team/pypdfium2/issues/367
     "pyzotero",  # SEE: https://github.com/urschrei/pyzotero/issues/110
-    "vcr.*",  # SEE: https://github.com/kevin1024/vcrpy/issues/780
 ]
 
 [tool.pylint]
@@ -322,7 +308,6 @@ enable = [
 # Newline-separated list of ignores from https://github.com/SAP/pylint-per-file-ignores
 per-file-ignores = [
     "packages/**/*.py:duplicate-code",  # Readers can have duplicated code
-    "tests/**/*.py:duplicate-code",  # Tests can have duplicated code
 ]
 
 [tool.pylint.reports]
@@ -342,30 +327,6 @@ plugins.line-length.tables = false
 plugins.no-duplicate-heading.siblings_only = true  # GitHub appends -X for duplicated headings
 plugins.no-emphasis-as-heading.enabled = false
 plugins.no-inline-html.enabled = false
-
-[tool.pytest.ini_options]
-# Add the specified OPTS to the set of command line arguments as if they had been
-# specified by the user.
-# Build addopts dynamically so it doesn't fail when optional plugins are missing.
-addopts = ""
-# set how loops are scoped to avoid https://github.com/BerriAI/litellm/issues/5854
-asyncio_default_fixture_loop_scope = "session"
-# Sets a list of filters and actions that should be taken for matched warnings.
-# By default all warnings emitted during the test session will be displayed in
-# a summary at the end of the test session.
-filterwarnings = [
-    "ignore:The `dict` method is deprecated; use `model_dump` instead",  # SEE: https://github.com/BerriAI/litellm/issues/5987
-    "ignore:Use 'content=<...>' to upload raw bytes/text content:DeprecationWarning",  # SEE: https://github.com/BerriAI/litellm/issues/5986
-    "ignore:builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__:DeprecationWarning:importlib._bootstrap",  # SEE: https://github.com/pymupdf/PyMuPDF/issues/3931 --> https://github.com/swig/swig/issues/2881#issuecomment-2332652634
-    'ignore:pkg_resources is deprecated as an API.:DeprecationWarning:pybtex',  # SEE: https://bitbucket.org/pybtex-devs/pybtex/issues/169/replace-pkg_resources-with
-]
-# List of directories that should be searched for tests when no specific directories,
-# files or test ids are given in the command line when executing pytest from the rootdir
-# directory. File system paths may use shell-style wildcards, including the recursive **
-# pattern.
-testpaths = ["packages", "tests"]
-# Timeout in seconds before dumping the stacks. Default is 0 which means no timeout.
-timeout = 300
 
 [tool.refurb]
 enable_all = true
@@ -600,16 +561,6 @@ unfixable = [
 mypy-init-return = true
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/*.py" = [
-    "N802",  # Tests function names can match class names
-    "PLC2701",  # Test can import private names if needed
-    "PLR2004",  # Tests can have magic values
-    "PLR6301",  # Test classes can ignore self
-    "S101",  # Tests can have assertions
-    "S301",  # can test pickle
-    "S310",
-]
-
 [tool.ruff.lint.pycodestyle]
 # The maximum line length to allow for line-length violations within
 # documentation (W505), including standalone comments.
@@ -654,8 +605,6 @@ ser = "ser"  # ser is short for serialized
 [tool.typos.files]
 extend-exclude = [
     "src/evoscholar/clients/client_data/journal_quality.csv",
-    "tests/cassettes/**",
-    "tests/stub_data/**",
 ]
 
 [tool.uv.sources]

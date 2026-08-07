@@ -19,17 +19,12 @@ from lmi import EmbeddingModel, LiteLLMModel
 
 from evoscholar.literature_qa.docs import Docs
 from evoscholar.literature_qa.settings import Settings
-from evoscholar.sources.clinical_trials import (
-    CLINICAL_TRIALS_BASE,
-    partition_clinical_trials_by_source,
-)
 from evoscholar.literature_qa.core import PQASession
 from evoscholar.utils import get_year
 
 from .tools import (
     AVAILABLE_TOOL_NAME_TO_CLASS,
     DEFAULT_TOOL_NAMES,
-    ClinicalTrialsSearch,
     Complete,
     EnvironmentState,
     GatherEvidence,
@@ -82,55 +77,28 @@ def settings_to_tools(  # noqa: PLR0912
                     "str", tool.info.get_properties()[pname]["description"]
                 ).format(current_year=get_year())
         elif issubclass(tool_type, GatherEvidence):
-            gather_evidence_tool = GatherEvidence(
-                settings=settings,
-                summary_llm_model=summary_llm_model,
-                embedding_model=embedding_model,
+            tool = make_tool(
+                GatherEvidence(
+                    settings=settings,
+                    summary_llm_model=summary_llm_model,
+                    embedding_model=embedding_model,
+                ).gather_evidence
             )
-
-            # if we're using the SearchClinicalTrialsTool,
-            # we override this tool's docstring/prompt
-            # because the default prompt is unaware of the clinical trials tool
-
-            if ClinicalTrialsSearch.TOOL_FN_NAME in (
-                settings.agent.tool_names or DEFAULT_TOOL_NAMES
-            ):
-                gather_evidence_tool.gather_evidence.__func__.__doc__ = (  # type: ignore[attr-defined]
-                    ClinicalTrialsSearch.GATHER_EVIDENCE_TOOL_PROMPT_OVERRIDE
-                )
-                gather_evidence_tool.partitioning_fn = (
-                    partition_clinical_trials_by_source
-                )
-
-            tool = make_tool(gather_evidence_tool.gather_evidence)
 
         elif issubclass(tool_type, GenerateAnswer):
-            generate_answer_tool = GenerateAnswer(
-                settings=settings,
-                llm_model=llm_model,
-                summary_llm_model=summary_llm_model,
-                embedding_model=embedding_model,
+            tool = make_tool(
+                GenerateAnswer(
+                    settings=settings,
+                    llm_model=llm_model,
+                    summary_llm_model=summary_llm_model,
+                    embedding_model=embedding_model,
+                ).gen_answer
             )
-
-            if ClinicalTrialsSearch.TOOL_FN_NAME in (
-                settings.agent.tool_names or DEFAULT_TOOL_NAMES
-            ):
-                generate_answer_tool.partitioning_fn = (
-                    partition_clinical_trials_by_source
-                )
-
-            tool = make_tool(generate_answer_tool.gen_answer)
 
         elif issubclass(tool_type, Reset):
             tool = make_tool(Reset().reset)
         elif issubclass(tool_type, Complete):
             tool = make_tool(Complete().complete)
-        elif issubclass(tool_type, ClinicalTrialsSearch):
-            tool = make_tool(
-                ClinicalTrialsSearch(
-                    search_count=settings.agent.search_count, settings=settings
-                ).clinical_trials_search
-            )
         else:
             raise NotImplementedError(f"Didn't handle tool type {tool_type}.")
         if tool.info.name == Complete.complete.__name__:
@@ -138,71 +106,6 @@ def settings_to_tools(  # noqa: PLR0912
         else:
             tools.insert(0, tool)
     return tools
-
-
-def make_clinical_trial_status(
-    total_paper_count: int,
-    relevant_paper_count: int,
-    total_clinical_trials: int,
-    relevant_clinical_trials: int,
-    evidence_count: int,
-    cost: float,
-) -> str:
-    return (
-        f"Status: Paper Count={total_paper_count}"
-        f" | Relevant Papers={relevant_paper_count}"
-        f" | Clinical Trial Count={total_clinical_trials}"
-        f" | Relevant Clinical Trials={relevant_clinical_trials}"
-        f" | Current Evidence={evidence_count}"
-        f" | Current Cost=${cost:.4f}"
-    )
-
-
-# SEE: https://regex101.com/r/L0L5MH/1
-CLINICAL_STATUS_SEARCH_REGEX_PATTERN: str = (
-    r"Status: Paper Count=(\d+) \| Relevant Papers=(\d+)(?:\s\|\sClinical Trial"
-    r" Count=(\d+)\s\|\sRelevant Clinical Trials=(\d+))?\s\|\sCurrent Evidence=(\d+)"
-)
-
-
-def clinical_trial_status(state: "EnvironmentState") -> str:
-    relevant_contexts = state.get_relevant_contexts()
-    return make_clinical_trial_status(
-        total_paper_count=len(
-            {
-                d.dockey
-                for d in state.docs.docs.values()
-                if CLINICAL_TRIALS_BASE
-                not in getattr(d, "other", {}).get("client_source", [])
-            }
-        ),
-        relevant_paper_count=len(
-            {
-                c.text.doc.dockey
-                for c in relevant_contexts
-                if CLINICAL_TRIALS_BASE
-                not in getattr(c.text.doc, "other", {}).get("client_source", [])
-            }
-        ),
-        total_clinical_trials=len(
-            {
-                d.dockey
-                for d in state.docs.docs.values()
-                if CLINICAL_TRIALS_BASE
-                in getattr(d, "other", {}).get("client_source", [])
-            }
-        ),
-        relevant_clinical_trials=len(
-            {
-                c.text.doc.dockey
-                for c in relevant_contexts
-                if CLINICAL_TRIALS_BASE
-                in getattr(c.text.doc, "other", {}).get("client_source", [])
-            }
-        ),
-        evidence_count=len(relevant_contexts),
-        cost=state.session.cost,
-    )
 
 
 class PaperQAEnvironment(Environment[EnvironmentState]):
@@ -247,13 +150,6 @@ class PaperQAEnvironment(Environment[EnvironmentState]):
     async def make_initial_state(self) -> EnvironmentState:
         await self._reset_docs()
 
-        status_fn = None
-
-        if ClinicalTrialsSearch.TOOL_FN_NAME in (
-            self._settings.agent.tool_names or DEFAULT_TOOL_NAMES
-        ):
-            status_fn = clinical_trial_status
-
         session_kwargs: dict[str, Any] = {}
         if self._session_id:
             session_kwargs["id"] = self._session_id
@@ -268,7 +164,6 @@ class PaperQAEnvironment(Environment[EnvironmentState]):
                 config_md5=self._settings.md5,
                 **session_kwargs,
             ),
-            status_fn=status_fn,
         )
 
     async def reset(self) -> tuple[list[Message], list[Tool]]:

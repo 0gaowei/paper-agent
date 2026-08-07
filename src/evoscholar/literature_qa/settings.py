@@ -392,10 +392,6 @@ class ParsingSettings(BaseModel):
             " title' and a year of 2022 or no year at all."
         ),
     )
-    use_human_readable_clinical_trials: bool = Field(
-        default=False,
-        description="Parse clinical trial JSONs into human readable text.",
-    )
     enrichment_llm: str = Field(
         # NOTE: from CapArena (https://arxiv.org/abs/2503.12329),
         # GPT-4o was the best image captioning model as of spring 2025

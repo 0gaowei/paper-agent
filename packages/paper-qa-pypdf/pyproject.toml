@@ -38,9 +38,6 @@ dev = [
     "fhlmi>=0.39",  # Pin for bytes_to_string
     "paper-qa-pypdf[enhanced,media]",
     "paper-qa>=5.23",  # Pin for PDFParserFn
-    "pytest-asyncio",
-    "pytest-rerunfailures",
-    "pytest>=8",  # Pin to keep recent
 ]
 # Enhanced means: (1) cluster images into figures and (2) parse tables
 enhanced = [

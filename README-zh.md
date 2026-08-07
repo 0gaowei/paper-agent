@@ -1011,7 +1011,6 @@ details = await client.query(
 | `parsing.parse_pdf`                              | `paperqa_pypdf.parse_pdf_to_pages`        | 解析 PDF 文件的函数。                                                                                                             |
 | `parsing.configure_pdf_parser`                   | No-op                                     | 在 `parse_pdf` 中配置 PDF 解析器的可调用对象，对于启用日志记录等行为很有用。                                                       |
 | `parsing.doc_filters`                            | `None`                                    | 允许文档的可选过滤器。                                                                                                            |
-| `parsing.use_human_readable_clinical_trials`     | `False`                                   | 将临床试验 JSON 解析为可读文本。                                                                                                  |
 | `parsing.enrichment_llm`                         | `"gpt-4o-2024-11-20"`                    | 媒体丰富的 LLM。                                                                                                                  |
 | `parsing.enrichment_llm_config`                  | `None`                                    | `enrichment_llm` 的可选配置。                                                                                                    |
 | `parsing.enrichment_page_radius`                 | `1`                                       | 丰富中上下文文本的页半径。                                                                                                        |
