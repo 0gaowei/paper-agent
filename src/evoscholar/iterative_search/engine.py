@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from lmi import embedding_model_factory
 
+from evoscholar.lightning.answer_builder import _format_citation
 from evoscholar.query_understanding import analyze_and_expand_query
 from evoscholar.paper_ranker.relevance import RelevanceTier
 from evoscholar.paper_ranker import ascore_papers, rank_with_mmr, score_papers
@@ -117,55 +118,6 @@ class _TrackedLLMAdapter:
             return str(getattr(getattr(choices[0], "message", None), "content", "") or "")
         return str(response)
 
-
-class _EvidenceAdapter:
-    """Inject paper abstracts into Docs without touching its file/PDF ingestion path.
-
-    This adapter is used in the fallback path (when synthesis fails) to build
-    evidence from paper abstracts.
-    """
-
-    def __init__(self, papers: Sequence[AcademicPaper]) -> None:
-        from evoscholar.literature_qa.docs import Docs
-        from evoscholar.literature_qa.core import DocDetails, Text
-
-        self.docs = Docs()
-        self.paper_by_id = {paper.stable_id: paper for paper in papers}
-        for paper in papers:
-            if not (paper.abstract or "").strip():
-                continue
-            citation = self._citation(paper)
-            details = DocDetails(
-                docname=paper.stable_id,
-                dockey=paper.stable_id,
-                citation=citation,
-                title=paper.title,
-                authors=paper.authors,
-                year=paper.year,
-                publication_date=paper.publication_date,
-                journal=paper.journal,
-                doi=paper.doi,
-                citation_count=paper.citation_count,
-                pdf_url=paper.pdf_url,
-                url=paper.url,
-                other={"client_source": paper.sources or [paper.source]},
-            )
-            text = Text(name=paper.stable_id, text=paper.abstract or "", doc=details)
-            self.docs.docs[details.dockey] = details
-            self.docs.texts.append(text)
-            self.docs.docnames.add(details.docname)
-
-    @staticmethod
-    def _citation(paper: AcademicPaper) -> str:
-        authors = ", ".join(paper.authors[:3]) or "Unknown authors"
-        year = str(paper.year) if paper.year else "n.d."
-        return f"{authors}. {paper.title or paper.stable_id}. {year}."
-
-    async def aget_evidence(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.docs.aget_evidence(*args, **kwargs)
-
-    async def aquery(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.docs.aquery(*args, **kwargs)
 
 
 class ResearchEngine:
@@ -901,7 +853,7 @@ class ResearchEngine:
                             paper_title=paper.title,
                             content=paper.abstract or "",
                             relevance_score=paper.relevance_score or 0.0,
-                            citation=_EvidenceAdapter._citation(paper),
+                            citation=_format_citation(paper),
                             provider=paper.source,
                         )
                         for paper in session.final_papers
