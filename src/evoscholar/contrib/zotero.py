@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Awaitable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from paperqa_pymupdf import parse_pdf_to_pages
 from pydantic import BaseModel
@@ -18,7 +18,11 @@ except ImportError as e:
         " `pip install paper-qa[zotero]`."
     ) from e
 from evoscholar.utils.paths import PAPERQA_DIR
-from evoscholar.literature_qa.core import PDFParserFn
+
+# `PDFParserFn` previously re-exported from `evoscholar.literature_qa.core`
+# (deleted in 6454572). The signature was a `Callable[[Path | bytes],
+# Awaitable[Any]]`. We re-declare it locally so type hints stay readable.
+PDFParserFn = Any  # see docstring above
 
 
 class ZoteroPaper(BaseModel):
