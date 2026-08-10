@@ -14,7 +14,7 @@ import httpx
 from lmi.utils import SEMANTIC_SCHOLAR_KEY_HEADER
 from tenacity import before_sleep_log, retry, retry_if_exception, stop_after_attempt
 
-from evoscholar.literature_qa.core import BibTeXSource, DocDetails
+from evoscholar.lightning.types import PaperDetail
 from evoscholar.utils import (
     _get_with_retrying,
     clean_upbibtex,
@@ -24,12 +24,11 @@ from evoscholar.utils import (
 )
 
 from .client_models import DOIOrTitleBasedProvider, DOIQuery, TitleAuthorQuery
-from .crossref import doi_to_bibtex
 from .exceptions import DOINotFoundError, make_flaky_ssl_error_predicate
 
 logger = logging.getLogger(__name__)
 
-# map from S2 fields to those in the DocDetails model
+# map from S2 fields to those in the PaperDetail model
 # allows users to specify which fields to include in the response
 SEMANTIC_SCHOLAR_API_MAPPING: dict[str, Collection[str]] = {
     "title": {"title"},
@@ -155,14 +154,21 @@ def s2_authors_match(authors: list[str], data: dict) -> bool:
     )
 
 
-async def parse_s2_to_doc_details(
+async def parse_s2_to_paper_detail(
     paper_data: dict[str, Any],
     client: httpx.AsyncClient,
     *,
     allow_missing_doi: bool = False,
-) -> DocDetails:
+) -> PaperDetail:
+    """Parse a Semantic Scholar paper payload into a `PaperDetail`.
 
-    bibtex_source = BibTeXSource.SELF_GENERATED.value
+    与上游 `parse_s2_to_paper_detail` 的关键差异：
+    - 不调用 `doi_to_bibtex` 走 Crossref 兜底（论文库场景已删除）
+    - bibtex / bibtex_key / bibtex_source 全部进 `other` 字典
+    - publication volume / issue / pages / publisher / issn 进 `other`
+    """
+
+    bibtex_source = "self_generated"
 
     if "data" in paper_data:
         paper_data = paper_data["data"][0]
@@ -178,19 +184,15 @@ async def parse_s2_to_doc_details(
     else:
         raise DOINotFoundError(f"Could not find DOI for {paper_data}.")
 
-    # Should we give preference to auto-generation?
-    if bibtex := clean_upbibtex(
+    # S2 generally returns a citationStyles.bibtex; we keep it (and the
+    # generated key) as part of `other`. No Crossref fallback (deleted).
+    bibtex = clean_upbibtex(
         paper_data.get("citationStyles", {}).get("bibtex", "")
-    ):
-        bibtex_source = BibTeXSource.SEMANTIC_SCHOLAR.value
-    elif doi:
-        try:
-            bibtex = await doi_to_bibtex(doi, client)
-            bibtex_source = BibTeXSource.CROSSREF.value
-        except DOINotFoundError:
-            bibtex = None
-    else:
-        bibtex = None
+    )
+    bibtex_source = "semantic_scholar" if bibtex else "none"
+    bibtex_key = (
+        None if not bibtex else bibtex.split("{")[1].split(",")[0]
+    )
 
     publication_date = None
     if paper_data.get("publicationDate"):
@@ -200,33 +202,37 @@ async def parse_s2_to_doc_details(
 
     maybe_pdf_url = (paper_data.get("openAccessPdf") or {}).get("url")
 
-    doc_details = DocDetails(
-        key=None if not bibtex else bibtex.split("{")[1].split(",")[0],
-        bibtex_type="article",  # s2 should be basically all articles
-        bibtex=bibtex,
+    paper = PaperDetail(
+        docname=doi or paper_data.get("paperId", ""),
+        title=paper_data.get("title", ""),
         authors=[author["name"] for author in paper_data.get("authors", [])],
-        publication_date=publication_date,
         year=paper_data.get("year"),
-        volume=journal_data.get("volume"),
-        pages=journal_data.get("pages"),
-        journal=journal_data.get("name"),
-        url=maybe_pdf_url,
-        pdf_url=maybe_pdf_url,
-        title=paper_data.get("title"),
-        citation_count=paper_data.get("citationCount"),
         doi=doi,
-        other={},  # Initialize empty dict for other fields
+        publication_date=publication_date,
+        abstract=paper_data.get("abstract"),
+        journal=journal_data.get("name"),
+        citation_count=paper_data.get("citationCount"),
+        pdf_url=maybe_pdf_url,
+        url=maybe_pdf_url,
+        other={},
     )
 
-    # Add any additional fields to the 'other' dict
-    for key, value in (
-        paper_data
-        | {"client_source": ["semantic_scholar"], "bibtex_source": [bibtex_source]}
-    ).items():
-        if key not in type(doc_details).model_fields:
-            doc_details.other[key] = value
+    # 论文库特有字段（体积/期刊号/页码等）和 S2 原始 payload 一并存到 `other`。
+    other = {
+        "volume": journal_data.get("volume"),
+        "pages": journal_data.get("pages"),
+        "bibtex": bibtex,
+        "bibtex_key": bibtex_key,
+        "bibtex_type": "article",  # s2 should be basically all articles
+        "bibtex_source": bibtex_source,
+        "client_source": ["semantic_scholar"],
+    }
+    for key, value in paper_data.items():
+        if key not in PaperDetail.model_fields:
+            other[key] = value
+    paper.other = other
 
-    return doc_details
+    return paper
 
 
 def semantic_scholar_headers() -> dict[str, str]:
@@ -249,7 +255,7 @@ async def s2_title_search(
     authors: list[str] | None = None,
     title_similarity_threshold: float = 0.75,
     fields: str = SEMANTIC_SCHOLAR_API_FIELDS,
-) -> DocDetails:
+) -> PaperDetail:
     """Reconcile DOI from Semantic Scholar - which only checks title. So we manually check authors."""
     if authors is None:
         authors = []
@@ -299,7 +305,7 @@ async def s2_title_search(
             f"Semantic scholar results did not match for {title!r} - title disagreement and no authors provided."
         )
 
-    return await parse_s2_to_doc_details(data, client)
+    return await parse_s2_to_paper_detail(data, client)
 
 
 @retry(
@@ -311,7 +317,7 @@ async def get_s2_doc_details_from_doi(
     doi: str | None,
     client: httpx.AsyncClient,
     fields: Collection[str] | None = None,
-) -> DocDetails:
+) -> PaperDetail:
     """Get paper details from Semantic Scholar given a DOI."""
     # should always be string, runtime error catch
     if doi is None:
@@ -328,7 +334,7 @@ async def get_s2_doc_details_from_doi(
     else:
         s2_fields = SEMANTIC_SCHOLAR_API_FIELDS
 
-    return await parse_s2_to_doc_details(
+    return await parse_s2_to_paper_detail(
         paper_data=await _s2_get_with_retrying(
             url=f"{SEMANTIC_SCHOLAR_BASE_URL}/graph/v1/paper/DOI:{doi}",
             params={"fields": s2_fields},
@@ -347,7 +353,7 @@ async def get_s2_doc_details_from_title(
     authors: list[str] | None = None,
     fields: Collection[str] | None = None,
     title_similarity_threshold: float = 0.75,
-) -> DocDetails:
+) -> PaperDetail:
     """Get paper details from Semantic Scholar given a title.
 
     Optionally match against authors if provided.
@@ -377,7 +383,7 @@ async def get_s2_doc_details_from_title(
 
 
 class SemanticScholarProvider(DOIOrTitleBasedProvider):
-    async def _query(self, query: TitleAuthorQuery | DOIQuery) -> DocDetails | None:
+    async def _query(self, query: TitleAuthorQuery | DOIQuery) -> PaperDetail | None:
         if isinstance(query, DOIQuery):
             return await get_s2_doc_details_from_doi(
                 doi=query.doi, client=query.client, fields=query.fields
@@ -396,7 +402,7 @@ async def s2_topic_search(
     limit: int,
     offset: int,
     session: httpx.AsyncClient,
-) -> list[DocDetails]:
+) -> list[PaperDetail]:
     """Search Semantic Scholar for papers matching a topic query."""
     endpoint, params = SemanticScholarSearchType.DEFAULT.make_url_params(
         params={
@@ -407,10 +413,10 @@ async def s2_topic_search(
         limit=limit,
     )
     data = await _s2_get_with_retrying(url=endpoint, params=params, client=session)
-    documents: list[DocDetails] = []
+    documents: list[PaperDetail] = []
     for paper_data in data.get("data", []):
         documents.append(
-            await parse_s2_to_doc_details(
+            await parse_s2_to_paper_detail(
                 paper_data, session, allow_missing_doi=True
             )
         )
@@ -439,7 +445,7 @@ async def s2_paper_references(
 
 async def s2_get_doc_details(
     paper_id: str, session: httpx.AsyncClient
-) -> DocDetails | None:
+) -> PaperDetail | None:
     """Fetch one Semantic Scholar paper by DOI or Semantic Scholar ID."""
     search_type = (
         SemanticScholarSearchType.DOI
@@ -454,7 +460,7 @@ async def s2_get_doc_details(
     )
     paper_data = await _s2_get_with_retrying(url=endpoint, params=params, client=session)
     try:
-        return await parse_s2_to_doc_details(
+        return await parse_s2_to_paper_detail(
             paper_data, session, allow_missing_doi=True
         )
     except DOINotFoundError:

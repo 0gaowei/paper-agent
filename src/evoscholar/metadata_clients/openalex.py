@@ -16,7 +16,7 @@ from tenacity import (
     stop_after_attempt,
 )
 
-from evoscholar.literature_qa.core import DocDetails
+from evoscholar.lightning.types import PaperDetail
 from evoscholar.utils import BIBTEX_MAPPING, mutate_acute_accents, strings_similarity
 
 from .client_models import DOIOrTitleBasedProvider, DOIQuery, TitleAuthorQuery
@@ -70,7 +70,7 @@ async def get_doc_details_from_openalex(  # noqa: PLR0912
     title: str | None = None,
     fields: Collection[str] | None = None,
     title_similarity_threshold: float = 0.75,
-) -> DocDetails | None:
+) -> PaperDetail | None:
     """Get paper details from OpenAlex given a DOI or paper title.
 
     Args:
@@ -170,17 +170,16 @@ async def get_doc_details_from_openalex(  # noqa: PLR0912
     if doi and results_data.get("doi") != doi:
         raise DOINotFoundError(f"DOI {doi!r} not found in OpenAlex.")
 
-    return parse_openalex_to_doc_details(results_data)
+    return parse_openalex_to_paper_detail(results_data)
 
 
-def parse_openalex_to_doc_details(message: dict[str, Any]) -> DocDetails:
-    """Parse OpenAlex API response to DocDetails.
+def parse_openalex_to_paper_detail(message: dict[str, Any]) -> PaperDetail:
+    """Parse an OpenAlex work payload into a `PaperDetail`.
 
-    Args:
-        message: The OpenAlex API response message.
-
-    Returns:
-        Parsed document details.
+    与上游 `parse_openalex_to_doc_details` 的关键差异：
+    - 论文库字段（bibtex / key / issue / publisher / issn / license /
+      volume / pages / url）全部进 `other` 字典
+    - 不返回 `DocDetails`，仅返回我们搜索场景需要的最小模型
     """
     raw_author_names = [
         authorship.get("raw_author_name", "")
@@ -222,27 +221,36 @@ def parse_openalex_to_doc_details(message: dict[str, Any]) -> DocDetails:
 
     bibtex_type = BIBTEX_MAPPING.get(message.get("type") or "other", "misc")
 
-    return DocDetails(
-        key=None,
-        bibtex_type=bibtex_type,
-        bibtex=None,
+    abstract = _restore_openalex_abstract(message.get("abstract_inverted_index"))
+
+    paper = PaperDetail(
+        docname=doi or message.get("id", ""),
+        title=title or "",
         authors=sanitized_authors,
-        publication_date=publication_date,
         year=publication_year,
-        volume=volume,
-        issue=issue,
-        publisher=publisher,
-        issn=issn,
-        pages=pages,
-        journal=journal,
-        url=doi,
-        title=title,
-        citation_count=citation_count,
         doi=doi,
-        license=oa_license,
+        publication_date=publication_date,
+        abstract=abstract,
+        journal=journal,
+        citation_count=citation_count,
         pdf_url=pdf_url,
-        other=message,
+        url=doi,
+        other={},
     )
+
+    # 论文库特有字段（volume/issue/pages 等）+ OpenAlex 原始 payload 全存 `other`
+    paper.other = {
+        "publisher": publisher,
+        "issn": issn,
+        "volume": volume,
+        "issue": issue,
+        "pages": pages,
+        "license": oa_license,
+        "bibtex_type": bibtex_type,
+        "client_source": ["openalex"],
+        **message,
+    }
+    return paper
 
 
 class OpenAlexProvider(DOIOrTitleBasedProvider):
@@ -254,7 +262,7 @@ class OpenAlexProvider(DOIOrTitleBasedProvider):
 
     async def get_doc_details(
         self, doi: str, client: httpx.AsyncClient, fields: Collection[str] | None = None
-    ) -> DocDetails | None:
+    ) -> PaperDetail | None:
         """Get document details by DOI.
 
         Args:
@@ -275,7 +283,7 @@ class OpenAlexProvider(DOIOrTitleBasedProvider):
         client: httpx.AsyncClient,
         title_similarity_threshold: float = 0.75,
         fields: Collection[str] | None = None,
-    ) -> DocDetails | None:
+    ) -> PaperDetail | None:
         """Search for document details by title.
 
         Args:
@@ -294,7 +302,7 @@ class OpenAlexProvider(DOIOrTitleBasedProvider):
             fields=fields,
         )
 
-    async def _query(self, query: TitleAuthorQuery | DOIQuery) -> DocDetails | None:
+    async def _query(self, query: TitleAuthorQuery | DOIQuery) -> PaperDetail | None:
         """Query the OpenAlex API via the provided DOI or title.
 
         Args:
@@ -370,7 +378,7 @@ async def openalex_search(
     session: httpx.AsyncClient,
     per_page: int,
     cursor: str = "*",
-) -> list[DocDetails]:
+) -> list[PaperDetail]:
     """Search OpenAlex works and restore its inverted-index abstracts."""
     data = await _openalex_get(
         f"{OPENALEX_BASE_URL}/works",
@@ -378,7 +386,7 @@ async def openalex_search(
         params={"search": query, "per-page": per_page, "cursor": cursor},
     )
     return [
-        parse_openalex_to_doc_details(_prepare_openalex_work(message))
+        parse_openalex_to_paper_detail(_prepare_openalex_work(message))
         for message in data.get("results", [])
     ]
 
@@ -395,7 +403,7 @@ async def openalex_referenced_works(
 
 async def openalex_get_doc(
     paper_id: str, session: httpx.AsyncClient
-) -> DocDetails | None:
+) -> PaperDetail | None:
     """Fetch one OpenAlex work by OpenAlex ID or DOI."""
     identifier = paper_id
     if paper_id.lower().startswith("10."):
@@ -408,4 +416,4 @@ async def openalex_get_doc(
         if exc.response.status_code == httpx.codes.NOT_FOUND:
             return None
         raise
-    return parse_openalex_to_doc_details(_prepare_openalex_work(data))
+    return parse_openalex_to_paper_detail(_prepare_openalex_work(data))

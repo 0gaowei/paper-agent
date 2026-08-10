@@ -13,7 +13,7 @@ import httpx
 from tenacity import AsyncRetrying
 
 from ..iterative_search.models import AcademicPaper, SearchResult
-from ..literature_qa.core import DocDetails
+from ..lightning.types import PaperDetail
 from .openalex import openalex_get_doc, openalex_referenced_works, openalex_search
 from .semantic_scholar import s2_get_doc_details, s2_paper_references, s2_topic_search
 
@@ -39,7 +39,7 @@ def _normalized_doi(doi: str | None) -> str | None:
     return doi.removeprefix("https://doi.org/").removeprefix("http://dx.doi.org/").lower()
 
 
-def _stable_id(details: DocDetails, provider: str) -> str:
+def _stable_id(details: PaperDetail, provider: str) -> str:
     if doi := _normalized_doi(details.doi):
         return doi
     other = details.other or {}
@@ -53,7 +53,7 @@ def _stable_id(details: DocDetails, provider: str) -> str:
     return f"{provider}:{digest}"
 
 
-def _doc_to_paper(details: DocDetails, provider: str) -> AcademicPaper:
+def _doc_to_paper(details: PaperDetail, provider: str) -> AcademicPaper:
     other = details.other or {}
     fields = other.get("fieldsOfStudy") or [
         concept.get("display_name", "")
