@@ -289,6 +289,32 @@ rg "from evoscholar\.iterative_search\.settings" src/evoscholar/literature_qa/se
   - `AcademicPaper`（反向）依然走 TYPE_CHECKING
 **教训**：批量删除 compat re-export 前，对每个被 re-export 的符号做"如果是 Pydantic model 字段类型 → 仍需顶层 import；如果是 TYPE_CHECKING only → 删除安全"二分判断。
 
+### 删包前必须先做"反向依赖审计"
+
+**触发条件**：HANDOFF Phase B 要"替换 metadata_clients 3 个 Provider 中的 DocDetails → PaperDetail"
+**现象**：3 个 Provider 文件还在引用 `client_models.DOIOrTitleBasedProvider`、`DOIQuery`、`TitleAuthorQuery`、`exceptions.DOINotFoundError`、`make_flaky_ssl_error_predicate`、甚至 `crossref.doi_to_bibtex` —— 全部是上一阶段 WIP commit `6454572` 已经删掉的。
+**根因**：HANDOFF 文档的范围低估了，只列了 `DocDetails` / `BibTeXSource` 两个被引用的 lit_qa 符号，没列 `client_models.py` 之类被删的本地模块。
+**解法**：
+- 实际动手前 `rg "from evoscholar\." src/evoscholar/metadata_clients/` 全量扫一次
+- 缺什么 scaffold 就**最小集复活**（新写 client_models 的最小版本；不 import lit_qa），不要直接 `git show HEAD~1:path` 全量恢复（旧版本自带 lit_qa 引用，重蹈覆辙）
+- 删除 `crossref` 的 bibtex fallback 路径（论文库场景不要），同理 `_bibtex` / `bibtex_type` / `key` 全部塞进 `PaperDetail.other` 字典
+**教训**：删包之前先 `rg` 出每个被删包 import 的"实际调用方"，按调用方式分类：
+  - 类型注解用 → 重写到轻量模型 + 改 import
+  - 基类用 → 新写最小版本地基类（不引入 lit_qa）
+  - 辅助函数用 → inline 到调用方 / 删路径 / 重建最小版
+  - 字段用 → 字段塞到 `other` 字典
+
+### Pydantic v2 + `from __future__ import annotations` + `model_post_init` 兼容性陷阱
+
+**触发条件**：HANDOFF Phase A 写 `PaperDetail` 时用 `model_post_init(self, _context)` 自动给 `dockey` 赋值等于 `docname`
+**现象**：`pydantic.errors.PydanticUserError: PaperDetail is not fully defined; you should define "datetime", then call PaperDetail.model_rebuild()`。直接 import 触发运行时 `ValidationError`。
+**根因**：`from __future__ import annotations` 把所有 type hints 变成字符串，Pydantic v2 在 `model_post_init` 签名含自定义参数（`_context`）时会因前向引用解析失败而 crash。`model_validator(mode="after")` 是 Pydantic v2 推荐的等价实现，能正确处理 forward refs。
+**解法**：
+- 改用 `@model_validator(mode="after") def _dockey_defaults_to_docname(self) -> PaperDetail:` 返回 self
+- 模块加载末尾显式 `PaperDetail.model_rebuild()` 兜底
+- 或者去掉 `from __future__ import annotations` 让注解立即解析 —— 但项目强制要 future import
+**教训**：Pydantic v2 模型里写"自动派生字段"优先用 `model_validator(mode="after")`（+ `object.__setattr__` 处理 required field mutation），而不是 `model_post_init`。后者在 future-annotations 项目里有 forward-ref 解析陷阱。
+
 ---
 
 ## 一句话总结
