@@ -88,22 +88,53 @@ class _SemanticScholarAcademicProvider:
 
     async def search(self, query: str, top_k: int) -> SearchResult:
         started = time.perf_counter()
+        logger.debug(
+            "SemanticScholar.search start, query='%s', top_k=%d",
+            query,
+            top_k,
+        )
         documents = await s2_topic_search(query, top_k, 0, self.session)
         papers = [_doc_to_paper(document, self.name) for document in documents]
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "SemanticScholar.search done, query='%s', papers=%d, elapsed_ms=%d",
+            query,
+            len(papers),
+            elapsed_ms,
+        )
         return SearchResult(
             papers=papers,
             provider=self.name,
             query=query,
-            elapsed_ms=int((time.perf_counter() - started) * 1000),
+            elapsed_ms=elapsed_ms,
             total_results=len(papers),
         )
 
     async def get_doc_details(self, doi_or_id: str) -> AcademicPaper | None:
+        logger.debug("SemanticScholar.get_doc_details, id='%s'", doi_or_id)
         details = await s2_get_doc_details(doi_or_id, self.session)
+        if details:
+            logger.debug(
+                "SemanticScholar.get_doc_details found, id='%s', title='%s'",
+                doi_or_id,
+                details.title[:40] if details.title else "N/A",
+            )
+        else:
+            logger.debug(
+                "SemanticScholar.get_doc_details not found, id='%s'",
+                doi_or_id,
+            )
         return _doc_to_paper(details, self.name) if details else None
 
     async def get_references(self, paper_id: str) -> list[str]:
-        return await s2_paper_references(paper_id, self.session)
+        logger.debug("SemanticScholar.get_references, paper_id='%s'", paper_id)
+        refs = await s2_paper_references(paper_id, self.session)
+        logger.debug(
+            "SemanticScholar.get_references done, paper_id='%s', refs=%d",
+            paper_id,
+            len(refs),
+        )
+        return refs
 
 
 class _OpenAlexAcademicProvider:
@@ -114,22 +145,53 @@ class _OpenAlexAcademicProvider:
 
     async def search(self, query: str, top_k: int) -> SearchResult:
         started = time.perf_counter()
+        logger.debug(
+            "OpenAlex.search start, query='%s', top_k=%d",
+            query,
+            top_k,
+        )
         documents = await openalex_search(query, self.session, top_k, "*")
         papers = [_doc_to_paper(document, self.name) for document in documents]
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "OpenAlex.search done, query='%s', papers=%d, elapsed_ms=%d",
+            query,
+            len(papers),
+            elapsed_ms,
+        )
         return SearchResult(
             papers=papers,
             provider=self.name,
             query=query,
-            elapsed_ms=int((time.perf_counter() - started) * 1000),
+            elapsed_ms=elapsed_ms,
             total_results=len(papers),
         )
 
     async def get_doc_details(self, doi_or_id: str) -> AcademicPaper | None:
+        logger.debug("OpenAlex.get_doc_details, id='%s'", doi_or_id)
         details = await openalex_get_doc(doi_or_id, self.session)
+        if details:
+            logger.debug(
+                "OpenAlex.get_doc_details found, id='%s', title='%s'",
+                doi_or_id,
+                details.title[:40] if details.title else "N/A",
+            )
+        else:
+            logger.debug(
+                "OpenAlex.get_doc_details not found, id='%s'",
+                doi_or_id,
+            )
         return _doc_to_paper(details, self.name) if details else None
 
     async def get_references(self, paper_id: str) -> list[str]:
-        return await openalex_referenced_works(paper_id, self.session)
+        logger.debug("OpenAlex.get_references, paper_id='%s'", paper_id)
+        refs = await openalex_referenced_works(paper_id, self.session)
+        logger.debug(
+            "OpenAlex.get_references done, paper_id='%s', refs=%d",
+            paper_id,
+            len(refs),
+        )
+        return refs
 
 
 class AcademicSearchClient:
@@ -164,6 +226,10 @@ class AcademicSearchClient:
         self.retry = retry
         self.call_counts: Counter[str] = Counter()
         self.last_errors: list[str] = []
+        logger.info(
+            "AcademicSearchClient initialized, providers=%s",
+            [p.name for p in self.providers],
+        )
 
     async def _call(self, operation: Callable[[], Awaitable[Any]]) -> Any:
         if self.retry is None:
@@ -176,10 +242,43 @@ class AcademicSearchClient:
 
     async def search(self, query: str, top_k: int) -> SearchResult:
         started = time.perf_counter()
+        logger.debug(
+            "AcademicSearchClient.search start, query='%s', top_k=%d, providers=%s",
+            query,
+            top_k,
+            [p.name for p in self.providers],
+        )
 
         async def run(provider: AcademicSearchProvider) -> SearchResult:
             self.call_counts[provider.name] += 1
-            return await self._call(lambda: provider.search(query, top_k))
+            t0 = time.perf_counter()
+            try:
+                result = await self._call(lambda: provider.search(query, top_k))
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                if result.success:
+                    logger.debug(
+                        "AcademicSearchClient provider '%s' search success, papers=%d, elapsed_ms=%d",
+                        provider.name,
+                        len(result.papers),
+                        elapsed_ms,
+                    )
+                else:
+                    logger.warning(
+                        "AcademicSearchClient provider '%s' search failed: %s",
+                        provider.name,
+                        result.error_message,
+                    )
+                return result
+            except Exception as exc:
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                logger.error(
+                    "AcademicSearchClient provider '%s' search exception: %s, elapsed_ms=%d",
+                    provider.name,
+                    exc,
+                    elapsed_ms,
+                    exc_info=True,
+                )
+                raise
 
         outcomes = await asyncio.gather(
             *(run(provider) for provider in self.providers), return_exceptions=True
@@ -214,17 +313,33 @@ class AcademicSearchClient:
                     dict.fromkeys([*existing.citation_ids, *paper.citation_ids])
                 )
         self.last_errors = errors
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "AcademicSearchClient.search done, query='%s', papers=%d (merged from %d providers), "
+            "successful=%d, errors=%s, elapsed_ms=%d",
+            query,
+            min(len(papers_by_id), top_k),
+            successful_providers,
+            successful_providers,
+            errors,
+            elapsed_ms,
+        )
         return SearchResult(
             papers=list(papers_by_id.values())[:top_k],
             provider=self.name,
             query=query,
-            elapsed_ms=int((time.perf_counter() - started) * 1000),
+            elapsed_ms=elapsed_ms,
             success=successful_providers > 0,
             error_message="; ".join(errors) or None,
             total_results=len(papers_by_id),
         )
 
     async def get_doc_details(self, doi_or_id: str) -> AcademicPaper | None:
+        logger.debug(
+            "AcademicSearchClient.get_doc_details, id='%s', providers=%s",
+            doi_or_id,
+            [p.name for p in self.providers],
+        )
         errors: list[str] = []
         for provider in self.providers:
             self.call_counts[provider.name] += 1
@@ -232,6 +347,11 @@ class AcademicSearchClient:
                 if paper := await self._call(
                     lambda provider=provider: provider.get_doc_details(doi_or_id)
                 ):
+                    logger.debug(
+                        "AcademicSearchClient.get_doc_details: provider '%s' found paper '%s'",
+                        provider.name,
+                        paper.title[:40] if paper.title else paper.stable_id,
+                    )
                     return paper
             except asyncio.CancelledError:
                 raise
@@ -239,9 +359,15 @@ class AcademicSearchClient:
                 errors.append(f"{provider.name}: {exc}")
                 logger.warning("Academic provider %s failed: %s", provider.name, exc)
         self.last_errors = errors
+        logger.debug("AcademicSearchClient.get_doc_details: not found for id='%s'", doi_or_id)
         return None
 
     async def get_references(self, paper_id: str) -> list[str]:
+        logger.debug(
+            "AcademicSearchClient.get_references, paper_id='%s', providers=%s",
+            paper_id,
+            [p.name for p in self.providers],
+        )
         outcomes: list[str] = []
         errors: list[str] = []
         for provider in self.providers:
@@ -258,4 +384,11 @@ class AcademicSearchClient:
                 errors.append(f"{provider.name}: {exc}")
                 logger.warning("Academic provider %s failed: %s", provider.name, exc)
         self.last_errors = errors
-        return list(dict.fromkeys(outcomes))
+        deduped = list(dict.fromkeys(outcomes))
+        logger.debug(
+            "AcademicSearchClient.get_references done, paper_id='%s', refs=%d (deduped=%d)",
+            paper_id,
+            len(outcomes),
+            len(deduped),
+        )
+        return deduped

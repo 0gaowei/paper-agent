@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import Counter
@@ -10,6 +11,8 @@ from .relevance import RelevanceTier
 
 if TYPE_CHECKING:
     from evoscholar.iterative_search.models import AcademicPaper
+
+logger = logging.getLogger(__name__)
 
 _TOKEN_PATTERN = re.compile(r"[\w]+", flags=re.UNICODE)
 _FACTOR_KEYS = ("relevance", "recency", "citation", "diversity", "combined")
@@ -143,10 +146,23 @@ def score_papers(
         document_texts = [
             f"{paper.title or ''}\n{paper.abstract or ''}" for paper in papers
         ]
+        logger.debug("score_papers: embedding %d documents", len(document_texts))
         vectors = embed_texts_sync(embedding_model, [query, *document_texts])
         relevance_scores = [_cosine(vectors[0], vector) for vector in vectors[1:]]
-    except Exception:
+        logger.info(
+            "score_papers: done (embedding), papers=%d, method=embedding",
+            len(papers),
+        )
+    except Exception as exc:
+        logger.warning(
+            "score_papers: embedding failed (%s), falling back to lexical scoring",
+            exc,
+        )
         relevance_scores = [_lexical_relevance(query, paper) for paper in papers]
+        logger.info(
+            "score_papers: done (lexical fallback), papers=%d",
+            len(papers),
+        )
     _assign_scores(papers, relevance_scores, config)
 
 
@@ -168,8 +184,21 @@ async def ascore_papers(
         document_texts = [
             f"{paper.title or ''}\n{paper.abstract or ''}" for paper in papers
         ]
+        logger.debug("ascore_papers: embedding %d documents", len(document_texts))
         vectors = await embed_texts_async(embedding_model, [query, *document_texts])
         relevance_scores = [_cosine(vectors[0], vector) for vector in vectors[1:]]
-    except Exception:
+        logger.info(
+            "ascore_papers: done (embedding), papers=%d, method=embedding",
+            len(papers),
+        )
+    except Exception as exc:
+        logger.warning(
+            "ascore_papers: embedding failed (%s), falling back to lexical scoring",
+            exc,
+        )
         relevance_scores = [_lexical_relevance(query, paper) for paper in papers]
+        logger.info(
+            "ascore_papers: done (lexical fallback), papers=%d",
+            len(papers),
+        )
     _assign_scores(papers, relevance_scores, config)

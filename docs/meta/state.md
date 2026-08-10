@@ -15,32 +15,47 @@
 ```
 evoscholar/
 ├── src/evoscholar/
-│   ├── core/                   # 空包，为 refactor-plan §1 预留
-│   ├── literature_qa/          # 空包，为 refactor-plan §1 预留
-│   ├── query_understanding/     # 空包，为 refactor-plan §1 预留
-│   ├── iterative_search/      # 空包，为 refactor-plan §1 预留
-│   ├── paper_ranker/           # 空包，为 refactor-plan §1 预留
-│   ├── synthesis/             # 空包，为 refactor-plan §1 预留
-│   ├── metadata_clients/      # 空包，为 refactor-plan §1 预留
-│   ├── settings/              # re-exports from settings_config.py
-│   ├── utils/                 # re-exports from utils_helpers.py
-│   ├── research/
-│   │   ├── engine.py          # 核心搜索循环，arun()，多轮迭代
-│   │   ├── query_understanding.py  # LLM 意图分析，子查询分解
-│   │   ├── ranking.py         # 综合排序，MMR，RelevanceTier
-│   │   ├── callbacks.py       # ResearchProgressCallback 协议
-│   │   └── models.py          # QueryUnderstanding, SubQuery, AcademicPaper 等
-│   ├── server/
-│   │   ├── routes/
-│   │   │   ├── sessions.py    # SSE 会话路由，_run_research_engine 后台任务
-│   │   │   └── graph.py       # 关系图谱路由（有 bug：边匹配类型错误）
-│   │   ├── bridge.py          # ResearchSession → SSE 事件，build_events()
-│   │   ├── sse_callback.py    # SSEProgressCallback 实现
-│   │   └── events.py          # EventType 枚举
-│   ├── clients/               # Semantic Scholar / OpenAlex / Crossref API
-│   ├── core_impl.py           # 原 core.py（重命名避免与 core/ 目录冲突）
-│   ├── utils_helpers.py       # 原 utils.py（重命名避免与 utils/ 目录冲突）
-│   └── settings_config.py     # 原 settings.py（重命名避免与 settings/ 目录冲突）
+│   ├── literature_qa/         # Papers, Docs, Settings, Tools (原 agents/)
+│   │   ├── core.py            # Docs, AgentConfig, prompts
+│   │   ├── models.py          # PQAResult 等
+│   │   ├── settings.py        # Settings 类（聚合所有子 Settings）
+│   │   ├── env.py             # 环境状态函数
+│   │   ├── tools.py           # Agent 工具
+│   │   └── search.py          # 搜索入口
+│   ├── iterative_search/      # Research engine（多轮迭代搜索）
+│   │   ├── engine.py          # arun()，多轮迭代循环
+│   │   ├── models.py          # QueryUnderstanding, SubQuery, AcademicPaper, ResearchSession
+│   │   ├── settings.py        # ResearchSettings
+│   │   └── core.py            # 空包（预留）
+│   ├── query_understanding/   # LLM 意图分析，子查询分解
+│   │   ├── analyze.py         # analyze_and_expand_query()
+│   │   ├── models.py          # QueryAnalysis, QueryIntent
+│   │   └── settings.py        # QueryUnderstandingSettings
+│   ├── paper_ranker/          # 论文排序，MMR 策略
+│   │   ├── ranker.py          # 综合排序
+│   │   ├── mmr.py             # Maximal Marginal Relevance
+│   │   └── relevance.py       # RelevanceTier
+│   ├── synthesis/             # 答案合成，SSE 事件格式化
+│   │   ├── builder.py         # build_evidence_and_answer()
+│   │   ├── models.py          # EvidenceSnippet, AnswerSummary, UsageStats
+│   │   ├── sse_formatter.py   # SSE payload 字段格式化
+│   │   └── settings.py        # SynthesisSettings
+│   ├── metadata_clients/      # 外部 API 客户端
+│   │   ├── academic_search.py # Semantic Scholar / OpenAlex / Crossref
+│   │   └── journal_quality.py # 期刊质量评分
+│   ├── utils/                 # 共享工具层
+│   │   ├── _helpers.py        # 原 utils_helpers.py（包内私有）
+│   │   ├── paths.py           # 路径工具
+│   │   ├── llms.py            # LLM 工具
+│   │   └── math_utils.py      # 数学工具
+│   └── server/                # FastAPI 服务
+│       ├── app.py             # FastAPI 应用，路由注册
+│       ├── bridge.py           # ResearchSession → SSE 事件
+│       ├── events.py           # EventType 枚举
+│       ├── settings.py         # ServerSettings
+│       └── routes/
+│           ├── sessions.py     # SSE 会话路由（有 bug）
+│           └── graph.py        # 关系图路由（有 bug）
 ├── frontend/src/
 │   ├── stores/search.ts       # 前端状态，applyEvent()，normalize()
 │   ├── views/
@@ -66,6 +81,9 @@ evoscholar/
 | 2026-07-27 | SSE ERROR 事件字段从 `message` 改为 `error` | 前端 expect `{error: string}`，字段名不匹配导致前端无法展示错误 |
 | 2026-07-27 | `_TrackedLLMAdapter` 只暴露 `call_single`，不暴露 `acomplete` | 统一接口，但导致 test stub 中 FakeLLM 需要在 call_single 首次返回 JSON |
 | 2026-07-26 | 合并 roadmap → state.md，roadmap 冻结 | 功能清单已过时，用 state.md 替代 |
+| 2026-08-07 | 删除全部测试文件和 ClinicalTrials 模块 | tests/、cassettes/、packages/*/tests/ 及 clinical_trials.py 全部删除；项目聚焦核心搜索代理，测试和临床试验功能暂不维护 |
+| 2026-08-07 | 删除所有兼容垫片（Commit 10） | Batch G 收尾：agents/、research/、clients.py 目录/文件全部删除；utils_helpers.py 重命名为 utils/_helpers.py；paperqa sys.modules 别名保留（供 paperqa_pypdf/pymupdf 下游 wheel 在 evoscholar 已加载后使用） |
+| 2026-08-07 | 澄清后端启动方式：`pqa-serve` 才是官方入口，uvicorn 直接跑是 Agent 记忆错误 | README 定义 source env.sh && pqa-serve；pqa-serve 内部调 uvicorn，支持 PQA_HOST/PQA_PORT 环境变量 |
 
 ## TODO
 
@@ -83,14 +101,15 @@ evoscholar/
 - [ ] **按意图归纳 UI**：根据子查询 intent 分组展示（后端已有，前端无 UI）
 - [ ] **GraphView 边匹配 bug**：`routes/graph.py` L93，`sq.round == paper.relevance_tier` 类型错误
 
-### P2（验证）
+### P2（架构验证）
 
 - [ ] 真实 API key E2E 验证（当前 API key 额度不足，无法测试完整流程）
 - [ ] 多 round 端到端验证（`max_rounds > 1`，SSE 事件序列）
 - [ ] citation_expanded 事件验证
+- [ ] 删除测试后：补充必要的 smoke test / integration test（待规划）
 
 ## Dependencies
 
 - 后端：`python >= 3.12`，`litellm`，`lmi`，`fastapi`，`uvicorn`
 - 前端：`node >= 18`，`vue 3`，`pinia`，`element-plus`
-- 启动命令：`pqa-serve`（后端），`npm run dev`（前端，frontend 目录）
+- 启动命令：`pqa-serve`（后端，source env.sh && pqa-serve），`npm run dev`（前端，frontend 目录）

@@ -43,6 +43,11 @@ async def _run_research_engine(
     `asyncio.create_task(...)`. On CancelledError we emit CANCELLED and
     update the persisted session. On any other exception we emit ERROR.
     """
+    # #region debug log
+    import json, time
+    with open("/home/gaowei/paper-search/paper-qa/log/pqa-serve.log","a") as _f:
+        _f.write(json.dumps({"t":round(time.time()*1000),"loc":"sessions.py:_run_research_engine","msg":"started","engine":engine is not None})+"\n")
+    # #endregion
     from evoscholar.server.bridge import (
         ResearchEventBridge,
         research_to_server_session,
@@ -67,6 +72,12 @@ async def _run_research_engine(
         precomputed_understanding = await analyze_and_expand_query(
             query, engine.settings, tracked_llm
         )
+
+        # #region debug log
+        import json, time
+        with open("/home/gaowei/paper-search/paper-qa/log/pqa-serve.log","a") as _f:
+            _f.write(json.dumps({"t":round(time.time()*1000),"loc":"sessions.py:_run_research_engine","msg":"before arun","query":query})+"\n")
+        # #endregion
 
         research_session = await engine.arun(
             query,
@@ -99,6 +110,9 @@ async def _run_research_engine(
             await repository.save(session)
         raise
     except Exception as exc:  # noqa: BLE001
+        import json, time
+        with open("/home/gaowei/paper-search/paper-qa/log/pqa-serve.log","a") as _f:
+            _f.write(json.dumps({"t":round(time.time()*1000),"loc":"sessions.py:_run_research_engine","msg":"exception","exc":str(exc),"exc_type":type(exc).__name__})+"\n")
         logger.exception("ResearchEngine run failed for %s", session_id)
         error_msg = f"ResearchEngine failure: {exc!s}"
         await progress_callback.on_error(session_id, error_msg)

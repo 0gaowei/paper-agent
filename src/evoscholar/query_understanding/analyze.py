@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import re
 from typing import Any
 
@@ -9,6 +10,8 @@ from aviary.core import Message
 
 from .models import Domain, QueryIntent, QueryUnderstanding
 from .prompts import QUERY_UNDERSTANDING_PROMPT, QUERY_UNDERSTANDING_SYSTEM
+
+logger = logging.getLogger(__name__)
 
 _DOMAIN_ALIASES = {
     "ai": Domain.CS_AI,
@@ -113,6 +116,7 @@ def _normalize_payload(query: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _call_llm(llm_model: Any, messages: list[dict[str, str]]) -> Any:
+    logger.debug("_call_llm start, model=%s", getattr(llm_model, "name", type(llm_model).__name__))
     if hasattr(llm_model, "acomplete"):
         result = llm_model.acomplete(messages)
     elif hasattr(llm_model, "call_single"):
@@ -122,7 +126,9 @@ async def _call_llm(llm_model: Any, messages: list[dict[str, str]]) -> Any:
         )
     else:
         raise TypeError("LLM model must provide acomplete() or call_single()")
-    return await result if inspect.isawaitable(result) else result
+    response = await result if inspect.isawaitable(result) else result
+    logger.debug("_call_llm done")
+    return response
 
 
 async def analyze_and_expand_query(
@@ -139,6 +145,11 @@ async def analyze_and_expand_query(
     if not query:
         raise ValueError("query must not be empty")
 
+    logger.info(
+        "analyze_and_expand_query start, query='%s'",
+        query[:80],
+    )
+
     messages = [
         {"role": "system", "content": QUERY_UNDERSTANDING_SYSTEM},
         {
@@ -147,6 +158,21 @@ async def analyze_and_expand_query(
         },
     ]
     response = await _call_llm(llm_model, messages)
-    return QueryUnderstanding.model_validate(
-        _normalize_payload(query, _extract_json(_extract_text(response)))
+    payload = _normalize_payload(query, _extract_json(_extract_text(response)))
+    result = QueryUnderstanding.model_validate(payload)
+
+    logger.info(
+        "analyze_and_expand_query done, intent=%s, domains=%s, subqueries=%d",
+        result.intent,
+        result.domains,
+        len(result.subqueries),
     )
+    for sq in result.subqueries:
+        logger.debug(
+        "  subquery: priority=%.2f, domain=%s, purpose='%s', query='%s'",
+            sq.priority,
+            sq.domain,
+            getattr(sq, "purpose", "N/A"),
+            sq.query[:80],
+        )
+    return result

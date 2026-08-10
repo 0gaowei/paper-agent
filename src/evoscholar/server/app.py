@@ -72,9 +72,8 @@ def _build_research_engine(
             )
             app.state.settings = settings  # type: ignore[attr-defined]
 
-        # Use a shared httpx.AsyncClient from app.state if available
-        client = getattr(app.state, "client", None)
-        return ResearchEngine(settings=settings, providers=client)
+        # AcademicSearchClient is created internally by ResearchEngine.
+        return ResearchEngine(settings=settings)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "ResearchEngine init failed; create_session will return 503: %s", exc
@@ -279,29 +278,102 @@ def run(
     log_level: str = "info",
 ) -> None:
     """Run the server programmatically with uvicorn."""
-    uvicorn.run(
-        app="paperqa.server.app:app",
+    from uvicorn.config import Config
+
+    log_dir = os.environ.get("PQA_LOG_DIR", "log")
+    os.makedirs(log_dir, exist_ok=True)
+
+    config = Config(
+        app="evoscholar.server.app:app",
         host=host,
         port=port,
         reload=reload,
         log_level=log_level,
+        log_config={
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s | %(levelname)-8s | %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+                "access": {
+                    "()": "uvicorn.logging.AccessFormatter",
+                    "fmt": "%(asctime)s | %(client_addr)s - %(request_line)s %(status_code)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stdout",
+                },
+                "default_file": {
+                    "formatter": "default",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": os.path.join(log_dir, "pqa-serve.log"),
+                    "maxBytes": 10485760,
+                    "backupCount": 3,
+                },
+                "access": {
+                    "formatter": "access",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stdout",
+                },
+            },
+            "loggers": {
+                "uvicorn": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "uvicorn.error": {"level": "INFO"},
+                "uvicorn.access": {
+                    "handlers": ["access", "default_file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+                # evoscholar package loggers - all write to both stdout and file
+                "evoscholar": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "evoscholar.iterative_search": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "evoscholar.metadata_clients": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "evoscholar.paper_ranker": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "evoscholar.synthesis": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+                "evoscholar.query_understanding": {
+                    "handlers": ["default", "default_file"],
+                    "level": log_level.upper(),
+                    "propagate": False,
+                },
+            },
+            # root logger also gets evoscholar output
+            "root": {
+                "handlers": ["default", "default_file"],
+                "level": log_level.upper(),
+            },
+        },
     )
-
-
-def _configure_file_logging(log_dir: str | None = None) -> None:
-    """Configure file logging for the application."""
-    if log_dir is None:
-        log_dir = os.environ.get("PQA_LOG_DIR", "log")
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, "pqa-serve.log")
-
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    )
-
-    root_logger = logging.getLogger()
-    root_logger.addHandler(file_handler)
+    uvicorn.Server(config).run()
 
 
 def serve() -> None:
@@ -309,8 +381,6 @@ def serve() -> None:
     import sys
 
     log_level = os.environ.get("PQA_LOG_LEVEL", "info")
-    log_dir = os.environ.get("PQA_LOG_DIR", "log")
-    _configure_file_logging(log_dir)
 
     # 获取环境变量中的主机和端口
     host = os.environ.get("PQA_HOST", "0.0.0.0")
