@@ -15,7 +15,6 @@ from tenacity import AsyncRetrying
 from ..iterative_search.models import AcademicPaper, SearchResult
 from ..lightning.types import PaperDetail
 from .openalex import openalex_get_doc, openalex_referenced_works, openalex_search
-from .semantic_scholar import s2_get_doc_details, s2_paper_references, s2_topic_search
 
 logger = logging.getLogger(__name__)
 
@@ -78,63 +77,6 @@ def _doc_to_paper(details: PaperDetail, provider: str) -> AcademicPaper:
         sources=[provider],
         citation_ids=[str(identifier) for identifier in referenced],
     )
-
-
-class _SemanticScholarAcademicProvider:
-    name = "semantic_scholar"
-
-    def __init__(self, session: httpx.AsyncClient) -> None:
-        self.session = session
-
-    async def search(self, query: str, top_k: int) -> SearchResult:
-        started = time.perf_counter()
-        logger.debug(
-            "SemanticScholar.search start, query='%s', top_k=%d",
-            query,
-            top_k,
-        )
-        documents = await s2_topic_search(query, top_k, 0, self.session)
-        papers = [_doc_to_paper(document, self.name) for document in documents]
-        elapsed_ms = int((time.perf_counter() - started) * 1000)
-        logger.info(
-            "SemanticScholar.search done, query='%s', papers=%d, elapsed_ms=%d",
-            query,
-            len(papers),
-            elapsed_ms,
-        )
-        return SearchResult(
-            papers=papers,
-            provider=self.name,
-            query=query,
-            elapsed_ms=elapsed_ms,
-            total_results=len(papers),
-        )
-
-    async def get_doc_details(self, doi_or_id: str) -> AcademicPaper | None:
-        logger.debug("SemanticScholar.get_doc_details, id='%s'", doi_or_id)
-        details = await s2_get_doc_details(doi_or_id, self.session)
-        if details:
-            logger.debug(
-                "SemanticScholar.get_doc_details found, id='%s', title='%s'",
-                doi_or_id,
-                details.title[:40] if details.title else "N/A",
-            )
-        else:
-            logger.debug(
-                "SemanticScholar.get_doc_details not found, id='%s'",
-                doi_or_id,
-            )
-        return _doc_to_paper(details, self.name) if details else None
-
-    async def get_references(self, paper_id: str) -> list[str]:
-        logger.debug("SemanticScholar.get_references, paper_id='%s'", paper_id)
-        refs = await s2_paper_references(paper_id, self.session)
-        logger.debug(
-            "SemanticScholar.get_references done, paper_id='%s', refs=%d",
-            paper_id,
-            len(refs),
-        )
-        return refs
 
 
 class _OpenAlexAcademicProvider:
@@ -208,7 +150,6 @@ class AcademicSearchClient:
     ) -> None:
         self.http_client = http_client
         built_in_providers: dict[str, AcademicSearchProvider] = {
-            "semantic_scholar": _SemanticScholarAcademicProvider(http_client),
             "openalex": _OpenAlexAcademicProvider(http_client),
         }
         selected_names = list(provider_names or built_in_providers)

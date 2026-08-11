@@ -258,12 +258,12 @@ PaperQA2 使用 LLM 来操作，
 任何与 LiteLLM 兼容的模型都可以配置为与 PaperQA2 一起使用。
 
 如果您需要索引大量论文（100+），
-您可能需要同时获取
+您可能需要获取
 [Crossref](https://www.crossref.org/documentation/metadata-plus/metadata-plus-keys/)
-和 [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key)
-的 API 密钥，
-这将允许您避免触及这些元数据服务的公共速率限制。
-这些可以作为 `CROSSREF_API_KEY` 和 `SEMANTIC_SCHOLAR_API_KEY` 变量导出。
+的 API 密钥，这样可以避免触及元数据服务的公共速率限制；
+该密钥可以通过 `CROSSREF_API_KEY` 环境变量导出。
+此外，本项目默认使用 [OpenAlex](https://openalex.org/) 作为免费学术搜索源
+（无需 API key），建议设置 `OPENALEX_MAILTO` 以获得更高优先级。
 
 ## 命令行使用
 
@@ -1059,8 +1059,6 @@ details = await client.query(
 
 这确实是个好问题！
 最好直接下载您认为有助于回答您问题的论文 PDF，然后从那里开始。
-
-请参阅[关于 zotero、openreview 和解析的详细文档](docs/tutorials/where_do_I_get_papers.md)
 
 ## 回调函数
 

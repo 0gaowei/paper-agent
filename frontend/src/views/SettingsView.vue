@@ -205,10 +205,7 @@ const searchConfig = reactive({
 })
 
 const dataSources = reactive([
-  { name: 'arXiv', enabled: true, priority: 1 },
-  { name: 'Semantic Scholar', enabled: true, priority: 2 },
-  { name: 'PubMed', enabled: false, priority: 3 },
-  { name: 'IEEE Xplore', enabled: false, priority: 4 }
+  { name: 'OpenAlex', enabled: true, priority: 1 }
 ])
 
 const stats = reactive({

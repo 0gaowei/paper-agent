@@ -135,7 +135,7 @@ analyze_and_expand_query()
 | `intent` | `QueryIntent` | 主要意图 |
 | `domains` | `list[Domain]` | 相关领域列表 |
 | `entities` | `list[str]` | 关键实体（作者、方法、论文等） |
-| `suitable_sources` | `list[str]` | 推荐数据源（如 semantic_scholar） |
+| `suitable_sources` | `list[str]` | 推荐数据源（如 openalex） |
 | `subqueries` | `list[SubQuery]` | 分解后的子查询列表 |
 | `search_strategy` | `str` | 整体搜索策略 |
 

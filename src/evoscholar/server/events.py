@@ -38,12 +38,11 @@ class DocsJsonSchema(BaseModel):
 
     model_config = BaseModel.model_config
 
-    id: str = Field(description="Stable document ID (DOI > S2 ID > title+year).")
+    id: str = Field(description="Stable document ID (DOI > OpenAlex ID > title+year).")
     title: str | None = Field(default=None, description="Paper title.")
     year: int | None = Field(default=None, description="Publication year.")
     authors: list[str] = Field(default_factory=list, description="Author names.")
     doi: str | None = Field(default=None, description="DOI.")
-    s2_id: str | None = Field(default=None, description="Semantic Scholar ID.")
     openalex_id: str | None = Field(default=None, description="OpenAlex ID.")
     citation_count: int | None = Field(default=None, description="Number of citations.")
     relevance_score: float = Field(

@@ -456,8 +456,7 @@ def is_retryable(
 ) -> bool:
     """Check if an exception is known to be a retryable HTTP issue."""
     if isinstance(exc, httpx.ConnectError | httpx.ReadError):
-        # Seen with Semantic Scholar:
-        # > aiohttp.client_exceptions.ClientConnectionResetError:
+        # aiohttp.client_exceptions.ClientConnectionResetError:
         # > Cannot write to closing transport
         # Then we migrated to httpx
         return True

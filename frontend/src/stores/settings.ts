@@ -20,10 +20,7 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   const dataSources = ref<DataSourceConfig[]>([
-    { name: 'arXiv', enabled: true, priority: 1 },
-    { name: 'Semantic Scholar', enabled: true, priority: 2 },
-    { name: 'PubMed', enabled: false, priority: 3 },
-    { name: 'IEEE Xplore', enabled: false, priority: 4 }
+    { name: 'OpenAlex', enabled: true, priority: 1 }
   ])
 
   const isLoading = ref(false)
@@ -94,10 +91,7 @@ export const useSettingsStore = defineStore('settings', () => {
       maxResults: 100
     }
     dataSources.value = [
-      { name: 'arXiv', enabled: true, priority: 1 },
-      { name: 'Semantic Scholar', enabled: true, priority: 2 },
-      { name: 'PubMed', enabled: false, priority: 3 },
-      { name: 'IEEE Xplore', enabled: false, priority: 4 }
+      { name: 'OpenAlex', enabled: true, priority: 1 }
     ]
   }
 

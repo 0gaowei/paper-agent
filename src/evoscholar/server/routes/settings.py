@@ -82,10 +82,6 @@ class SettingsPayload(BaseModel):
         default=False,
         description="Whether an LLM API key is configured.",
     )
-    s2_configured: bool = Field(
-        default=False,
-        description="Whether a Semantic Scholar API key is configured.",
-    )
     openalex_configured: bool = Field(
         default=False,
         description="Whether an OpenAlex API key is configured.",
@@ -151,7 +147,6 @@ def _sanitize_for_response(s: Settings) -> SettingsPayload:
         or _check_key("ANTHROPIC_API_KEY")
         or _check_key("LITELLM_API_KEY")
         or _llm_api_key is not None,
-        s2_configured=_check_key("SEMANTIC_SCHOLAR_API_KEY"),
         openalex_configured=_check_key("OPENTALEX_API_KEY"),
     )
 

@@ -22,14 +22,14 @@ function unwrap<T>(response: { data: T }): T {
 // expects camelCase. We convert at the network boundary so downstream
 // stores/views can stay typed.
 const SNAKE_TO_CAMEL_KEYS = new Set<string>([
-  's2_id', 'openalex_id', 'citation_count', 'relevance_tier',
+  'openalex_id', 'citation_count', 'relevance_tier',
   'referenced_works', 'citing_works', 'created_at', 'updated_at',
   'stop_reason', 'error_message', 'total_tokens', 'prompt_tokens',
   'completion_tokens', 'total_cost', 'llm_calls', 'search_calls',
   'researcher_llm', 'researcher_llm_config', 'summary_llm',
   'max_rounds', 'candidates_per_round', 'citation_expansion_limit',
   'high_relevance_threshold', 'partial_relevance_threshold',
-  'llm_configured', 's2_configured', 'openalex_configured',
+  'llm_configured', 'openalex_configured',
   'papers_count', 'paper_count', 'answer_length', 'answer_summary', 'subqueries',
   'relevance_score', 'round_started', 'paper_found', 'events_emitted',
   'original_query', 'suitable_sources', 'error_message',

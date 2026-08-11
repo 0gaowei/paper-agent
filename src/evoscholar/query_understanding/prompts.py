@@ -29,7 +29,7 @@ Respond with a JSON object with this structure:
   "intent": "survey|specific|comparative|current_state|background|general",
   "domains": ["domain1", "domain2"],
   "entities": ["entity1", "entity2"],
-  "suitable_sources": ["semantic_scholar", "openalex"],
+  "suitable_sources": ["openalex"],
   "subqueries": [
     {{
       "query": "sub-query text",

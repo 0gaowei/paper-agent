@@ -117,7 +117,7 @@ class QueryUnderstanding(BaseModel):
     )
     suitable_sources: list[str] = Field(
         default_factory=list,
-        description="Recommended data sources (e.g., 'semantic_scholar', 'openalex').",
+        description="Recommended data sources (e.g., 'openalex').",
     )
     subqueries: list[SubQuery] = Field(
         default_factory=list,

@@ -10,7 +10,7 @@ export interface AcademicPaper {
   citationCount?: number
   isOpenAccess?: boolean
   pdfUrl?: string
-  semanticScholarUrl?: string
+  openalexUrl?: string
   relevance?: number
   relevanceTier?: 'high' | 'partial' | 'low' | string
   rankingFactors?: RankingFactors
@@ -21,7 +21,6 @@ export interface AcademicPaper {
   // when the API client surfaces raw payloads; normalize() in @/api converts
   // them to camelCase on the wire, but the optional snake_case forms are
   // tolerated for forward-compat with raw responses.
-  s2Id?: string
   openalexId?: string
   citation_count?: number
   relevance_tier?: string

@@ -261,11 +261,12 @@ or set up an open source LLM server (i.e. using [llamafile](https://github.com/M
 Any LiteLLM compatible model can be configured to use with PaperQA2.
 
 If you need to index a large set of papers (100+),
-you will likely want an API key for both
-[Crossref](https://www.crossref.org/documentation/metadata-plus/metadata-plus-keys/)
-and [Semantic Scholar](https://www.semanticscholar.org/product/api#api-key),
-which will allow you to avoid hitting public rate limits using these metadata services.
-Those can be exported as `CROSSREF_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY` variables.
+you will likely want an API key for
+[Crossref](https://www.crossref.org/documentation/metadata-plus/metadata-plus-keys/),
+which will allow you to avoid hitting public rate limits.
+That can be exported as a `CROSSREF_API_KEY` environment variable.
+OpenAlex is also used and is free / key-less; set `OPENALEX_MAILTO` to
+your email so OpenAlex prioritizes your requests.
 
 ## CLI Usage
 
@@ -1063,8 +1064,6 @@ will return much faster than the first query and we'll be certain the authors ma
 
 Well that's a really good question!
 It's probably best to just download PDFs of papers you think will help answer your question and start from there.
-
-See detailed docs [about zotero, openreview and parsing](docs/tutorials/where_do_I_get_papers.md)
 
 ## Callbacks
 

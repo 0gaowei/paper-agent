@@ -50,8 +50,7 @@ class TitleAuthorQuery(ClientQuery):
     @classmethod
     def ensure_fields_are_present(cls, data: dict[str, Any]) -> dict[str, Any]:
         # 镜像 paperqa 上游行为：fields 缺省时自动补 doi / title / authors
-        # 这样下游映射 (`SEMANTIC_SCHOLAR_API_MAPPING` 等) 不会因为 fields
-        # 缺失而漏掉关键 key。
+        # 这样下游映射不会因为 fields 缺失而漏掉关键 key。
         if fields := data.get("fields"):
             if "doi" not in fields:
                 fields.append("doi")

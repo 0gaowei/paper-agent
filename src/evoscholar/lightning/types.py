@@ -26,9 +26,8 @@ class PaperDetail(BaseModel):
     - `title` / `authors` / `year` / `doi`：搜索结果展示所需最小集。
     - `abstract` / `citation_count` / `pdf_url` / `url` / `journal` /
       `publication_date`：答案合成可能用到的元数据。
-    - `other`：escape hatch。OpenAlex / Semantic Scholar 的原始字段
-      （如 `fieldsOfStudy` / `concepts` / `referenced_works` / `paperId`
-      等）均放在这里，避免污染模型字段。
+    - `other`：escape hatch。OpenAlex 的原始字段
+      （如 `concepts` / `referenced_works` 等）均放在这里，避免污染模型字段。
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")

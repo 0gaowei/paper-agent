@@ -152,7 +152,7 @@ class ResearchEngine:
             self.provider: AcademicSearchProvider = AcademicSearchClient(
                 self._http_client, provider_names=settings.research.providers
             )
-            provider_names = list(settings.research.providers) if settings.research.providers else ["semantic_scholar", "openalex"]
+            provider_names = list(settings.research.providers) if settings.research.providers else ["openalex"]
             logger.info(
                 "ResearchEngine initialized with AcademicSearchClient, providers=%s",
                 provider_names,

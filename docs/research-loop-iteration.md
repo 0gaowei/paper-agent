@@ -37,25 +37,23 @@ ResearchEngine.arun()
 
 ## 0. 搜索数据源（AcademicSearchClient）
 
-**文件**: `src/paperqa/clients/academic_search.py` 第 135-225 行
+**文件**: `src/evoscholar/metadata_clients/academic_search.py`
 
-`AcademicSearchClient` 是一个**多源聚合搜索客户端**，`arun()` 通过 `self.provider` 间接调用它。构造时（第 148-151 行）默认注册 2 个第三方学术 API：
+`AcademicSearchClient` 是一个**多源聚合搜索客户端**，`arun()` 通过 `self.provider` 间接调用它。构造时默认注册 1 个第三方学术 API：
 
-| Provider | name | 实现位置 | 底层数据源 |
-|---|---|---|---|
-| Semantic Scholar | `semantic_scholar` | `_SemanticScholarAcademicProvider` 第 83-106 行 | [api.semanticscholar.org](https://api.semanticscholar.org/) — 语义检索 + 论文详情 + 引用列表 |
-| OpenAlex | `openalex` | `_OpenAlexAcademicProvider` 第 109-132 行 | [api.openalex.org](https://api.openalex.org/) — 开放学术图谱，搜索 + 文档详情 + referenced_works |
+| Provider | name | 底层数据源 |
+|---|---|---|
+| OpenAlex | `openalex` | [api.openalex.org](https://api.openalex.org/) — 开放学术图谱，搜索 + 文档详情 + referenced_works |
 
 **聚合调用机制**：
 
-- `search()` 第 177-225 行：`asyncio.gather` 并发调用所有 provider 的 `search()`，按 `stable_id`（优先 DOI，否则 SHA1(title+year)）去重；任何一个 provider 抛异常都会被捕获并 log warning，其它 provider 的结果继续合并 → **Partial Success**
-- `get_doc_details()` 第 227-242 行：按 provider 顺序**串行回退**调用，返回第一个非空结果
-- `get_references()` 第 244-261 行：聚合所有 provider 的引用 ID 后去重
+- `search()`：`asyncio.gather` 并发调用所有 provider 的 `search()`，按 `stable_id`（优先 DOI，否则 SHA1(title+year)）去重；任何一个 provider 抛异常都会被捕获并 log warning，其它 provider 的结果继续合并 → **Partial Success**
+- `get_doc_details()`：按 provider 顺序**串行回退**调用，返回第一个非空结果
+- `get_references()`：聚合所有 provider 的引用 ID 后去重
 
 **底层 API 调用**：
 
-- Semantic Scholar：`src/paperqa/clients/semantic_scholar.py` — `s2_topic_search` / `s2_get_doc_details` / `s2_paper_references`
-- OpenAlex：`src/paperqa/clients/openalex.py` — `openalex_search` / `openalex_get_doc` / `openalex_referenced_works`
+- OpenAlex：`src/evoscholar/metadata_clients/openalex.py` — `openalex_search` / `openalex_get_doc` / `openalex_referenced_works`
 
 **HTTP 客户端**：复用同一个 `httpx.AsyncClient`（连接池复用），异常重试通过可选 `AsyncRetrying`（tenacity）参数控制。
 

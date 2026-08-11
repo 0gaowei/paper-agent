@@ -33,7 +33,6 @@ class RelevanceTier(str, Enum):
 class PaperSource(str, Enum):
     """Source of a paper in a search session."""
 
-    SEMANTIC_SCHOLAR = "semantic_scholar"
     OPENTALEX = "openalex"
     CROSSREF = "crossref"
     MANUAL = "manual"
@@ -57,13 +56,12 @@ class AcademicPaper(BaseModel):
     model_config = BaseModel.model_config
 
     id: str = Field(
-        description="Stable paper ID (DOI > S2 ID > openalex_id > title+year hash)."
+        description="Stable paper ID (DOI > openalex_id > title+year hash)."
     )
     title: str = Field(description="Paper title.")
     year: int | None = Field(default=None, description="Publication year.")
     authors: list[str] = Field(default_factory=list, description="List of author names.")
     doi: str | None = Field(default=None, description="DOI (without URL prefix).")
-    s2_id: str | None = Field(default=None, description="Semantic Scholar paper ID.")
     openalex_id: str | None = Field(
         default=None, description="OpenAlex work ID (e.g. W1234567890)."
     )

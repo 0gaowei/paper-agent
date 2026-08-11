@@ -88,7 +88,7 @@ class AcademicPaper(BaseModel):
     stable_id: str = Field(
         description=(
             "Stable unique identifier for this paper. Priority: DOI > "
-            "SemanticScholar ID > OpenAlex ID > normalized title+year."
+            "OpenAlex ID > normalized title+year."
         ),
     )
     title: str | None = Field(default=None, description="Paper title.")
@@ -105,7 +105,7 @@ class AcademicPaper(BaseModel):
     )
     pdf_url: str | None = Field(default=None, description="URL to PDF if available.")
     url: str | None = Field(
-        default=None, description="Paper URL (e.g., Semantic Scholar page)."
+        default=None, description="Paper URL (e.g., OpenAlex landing page)."
     )
     fields_of_study: list[str] = Field(
         default_factory=list,
@@ -113,7 +113,7 @@ class AcademicPaper(BaseModel):
     )
     source: str = Field(
         default="unknown",
-        description="Provider that found this paper (e.g., 'semantic_scholar').",
+        description="Provider that found this paper (e.g., 'openalex').",
     )
     sources: list[str] = Field(
         default_factory=list,
@@ -195,7 +195,7 @@ class SearchResult(BaseModel):
         default_factory=list,
         description="Papers returned by the search.",
     )
-    provider: str = Field(description="Provider name (e.g., 'semantic_scholar').")
+    provider: str = Field(description="Provider name (e.g., 'openalex').")
     query: str = Field(description="The query that was searched.")
     elapsed_ms: int | None = Field(
         default=None,

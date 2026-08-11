@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SOURCE_TO_SERVER: dict[str, PaperSource] = {
-    "semantic_scholar": PaperSource.SEMANTIC_SCHOLAR,
     "openalex": PaperSource.OPENTALEX,
     "crossref": PaperSource.CROSSREF,
     "manual": PaperSource.MANUAL,

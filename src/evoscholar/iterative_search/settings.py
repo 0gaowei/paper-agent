@@ -65,7 +65,7 @@ class ResearchSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     providers: list[str] = Field(
-        default_factory=lambda: ["semantic_scholar", "openalex"]
+        default_factory=lambda: ["openalex"]
     )
     max_rounds: int = Field(default=3, ge=1)
     max_candidates_per_round: int = Field(default=20, ge=1)

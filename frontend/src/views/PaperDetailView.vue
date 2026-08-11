@@ -98,9 +98,9 @@
           <div class="section-card">
             <h2 class="section-title">论文链接</h2>
             <div class="links-list">
-              <a v-if="paper.semanticScholarUrl" :href="paper.semanticScholarUrl" target="_blank" class="external-link">
+              <a v-if="paper.openalexUrl" :href="paper.openalexUrl" target="_blank" class="external-link">
                 <el-icon><Link /></el-icon>
-                Semantic Scholar
+                OpenAlex
               </a>
               <a v-if="paper.pdfUrl" :href="paper.pdfUrl" target="_blank" class="external-link">
                 <el-icon><Document /></el-icon>
