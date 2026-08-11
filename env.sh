@@ -1,12 +1,8 @@
 #!/bin/bash
-# 激活 paper-qa conda 环境并加载 .env 文件
+# 使用 uv 运行命令（自动激活 .venv）
+# 用法: uv run <command> 或直接运行已安装的工具
 
-# 获取脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# 激活 conda 环境
-eval "$(~/miniconda3/bin/conda shell.bash hook)"
-conda activate paper-qa
 
 # 加载 .env 文件（如果存在）
 if [ -f "$SCRIPT_DIR/.env" ]; then
@@ -16,5 +12,7 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     echo "✓ 已加载 .env 文件中的环境变量"
 fi
 
-echo "✓ 已激活 conda 环境: paper-qa"
-echo "✓ Python 路径: $(which python)"
+echo "✓ 使用 uv 运行命令，示例:"
+echo "  uv run pqa-serve       # 启动后端服务"
+echo "  uv run pytest          # 运行测试"
+echo "  uv sync               # 同步依赖"

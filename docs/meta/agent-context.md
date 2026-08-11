@@ -218,8 +218,7 @@ Batch G 完成
   - 目录: src/evoscholar/agents/, src/evoscholar/research/, src/evoscholar/settings/ (空)
   - 文件: src/evoscholar/clients.py, src/evoscholar/utils_helpers.py
   - re-export: iterative_search/models.py 里 re-export from synthesis.models
-- 改动文件: src/evoscholar/__init__.py, contrib/openreview_paper_helper.py,
-  iterative_search/{engine.py,models.py}, paper_ranker/{mmr.py,ranker.py},
+- 改动文件: src/evoscholar/__init__.py, iterative_search/{engine.py,models.py}, paper_ranker/{mmr.py,ranker.py},
   server/{app.py,bridge.py,routes/sessions.py}, synthesis/models.py,
   utils/__init__.py + 新建 utils/_helpers.py (utils_helpers.py 重命名),
   7 个测试文件 (conftest + test_{academic_search,agents,cli,clients,configs,

@@ -4,12 +4,16 @@
 
 ## 快速启动
 
-### 1. 后端
+### 1. 安装依赖并启动后端
 
 ```bash
 cd /path/to/paper-qa
-source env.sh
-pqa-serve
+
+# 首次：创建虚拟环境并装好所有依赖
+uv sync --all-extras
+
+# 启动后端服务（使用 .venv 中的 Python）
+uv run pqa-serve
 ```
 
 API 文档: http://localhost:8000/docs
