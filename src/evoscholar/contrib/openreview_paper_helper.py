@@ -11,7 +11,10 @@ from aviary.core import Message
 from lmi import LiteLLMModel
 from pydantic import BaseModel, Field
 
-from evoscholar import Docs, Settings
+# Phase F：原 `from evoscholar import Docs, Settings` 已移除（Docs / 删除；
+# 论文库场景不再用）。本模块保留作为独立 OpenReview 集成 helper，仅依赖
+# `evoscholar.configs.Settings`（聚合 LLM 配置）。如不再需要可直接删除。
+from evoscholar.configs import Settings
 
 try:
     import openreview

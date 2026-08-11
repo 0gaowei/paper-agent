@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from evoscholar.literature_qa.settings import Settings
+from evoscholar.configs import Settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])

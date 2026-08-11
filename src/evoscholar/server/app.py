@@ -50,7 +50,7 @@ def _build_research_engine(
         settings = getattr(app.state, "settings", None)
         if settings is None:
             # Lifespan failed to initialize settings — fall back to a fresh one.
-            from evoscholar.literature_qa.settings import Settings as _Settings
+            from evoscholar.configs import Settings as _Settings
 
             settings = _Settings()
 
@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
     # Initialize the aggregated settings instance (single source of truth).
     # Server Settings (HTTP/credentials) are layered on top via routes/settings.py.
     try:
-        from evoscholar.literature_qa.settings import Settings
+        from evoscholar.configs import Settings
         from evoscholar.server.routes.settings import get_llm_credentials
 
         app.state.settings = Settings()  # type: ignore[attr-defined]

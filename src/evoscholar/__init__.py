@@ -1,3 +1,16 @@
+"""evoscholar (renamed from paper-qa 2026.3.19).
+
+顶层 export 极简：
+- 来自 ``lmi`` 的 EmbeddingModel / LLMModel / embedding_model_factory
+- 来自 ``evoscholar.configs`` 的 Settings / get_settings
+- 来自 ``evoscholar.utils.llms`` 的 embedding_model_factory re-export
+- 版本号
+
+论文库相关（Docs / DocDetails / Context / Doc / PQASession / Text /
+NumpyVectorStore / QdrantVectorStore / VectorStore / ask / agent_query）
+均已删除 — 见 ``docs/meta/HANDOFF-2026-08-10-23-no-paper-library-simplify.md``。
+"""
+
 from lmi import (
     EmbeddingModel,
     HybridEmbeddingModel,
@@ -10,43 +23,24 @@ from lmi import (
     embedding_model_factory,
 )
 
-from evoscholar.literature_qa import ask
-from evoscholar.literature_qa.main import agent_query
-from evoscholar.literature_qa.docs import Docs
-from evoscholar.literature_qa.core import Context, Doc, DocDetails, PQASession, Text
-from evoscholar.utils.llms import (
-    NumpyVectorStore,
-    QdrantVectorStore,
-    VectorStore,
-)
-from evoscholar.literature_qa.settings import Settings, get_settings
+from evoscholar.configs import Settings, get_settings
 from evoscholar.version import __version__
 
 __all__ = [
-    "Context",
-    "Doc",
-    "DocDetails",
-    "Docs",
     "EmbeddingModel",
     "HybridEmbeddingModel",
     "LLMModel",
     "LLMResult",
     "LiteLLMEmbeddingModel",
     "LiteLLMModel",
-    "NumpyVectorStore",
-    "PQASession",
-    "QdrantVectorStore",
     "SentenceTransformerEmbeddingModel",
     "Settings",
     "SparseEmbeddingModel",
-    "Text",
-    "VectorStore",
     "__version__",
-    "agent_query",
-    "ask",
     "embedding_model_factory",
     "get_settings",
 ]
+
 
 # Compatibility alias: keep ``import paperqa`` working so legacy downstream
 # code (e.g. ``paperqa_pypdf`` / ``paperqa_pymupdf`` wheels that still
