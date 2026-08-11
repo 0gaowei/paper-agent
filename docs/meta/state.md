@@ -15,17 +15,30 @@
 | 2026-08-10 | Phase C 清理：删 utils/llms.py 的 VectorStore/NumpyVectorStore/QdrantVectorStore、删 types.py、删 readers.py、inline zotero PDFParserFn | 这 3 个文件只剩 __pycache__ 时是论文库场景的"脚手架"，无任何 in-tree 调用方 |
 | 2026-08-10 | Phase D 极简答案合成器：替换 Docs/DocDetails/Text 全套为 lightning.answer_builder | 搜索场景只有 abstract，向量化反而低效；每 paper 一次 LLM 调用同时判断相关性 + 抽取 snippet，复杂度大幅降低 |
 | 2026-08-10 | _format_citation 提到 lightning.answer_builder 模块顶层，engine 与 answer_builder 共用 | 原 engine.py 的 _EvidenceAdapter._citation 与 synthesis/builder.py 的 _citation 重复实现；DRY 改进 |
+| 2026-08-11 | Phase E 完成：新建 configs.settings.Settings 替代 lit_qa.settings | 只承载 in-tree 实际使用的字段（llm/llm_config/embedding/research），不做完整功能恢复 |
+| 2026-08-11 | Phase F 删除 _ldp_shims.py + iterative_search/core.py | 两个模块均无 in-tree 调用方（LDP agent 框架未用，_TrackedLLMAdapter 已搬到 synthesis/builder.py） |
+| 2026-08-11 | **项目恢复运行**：`from evoscholar import ...` + `uvicorn evoscholar.server.app:app` + `curl /health` + `curl /api/settings` 全部 PASS | Phase A-G 全部完成；论文库场景彻底删除，搜索+极简总结路径完整 |
 
 ## Current State (WIP)
 
 - branch: `refactor/simplify-no-paper-library`
-- last commit: `d302b7b` refactor(lightning): Phase D - 替换 Docs/DocDetails/Text 为极简答案合成
-- 项目**当前不可运行**（`from evoscholar import ...` 报 ImportError，因为 __init__.py 还引用 lit_qa，下一 Phase 处理）
-- Phase A+B+C+D 完成 ✅（lightning 包就绪 + Provider 切完 + utils 清理 + iterative_search/synthesis 改造）
-- Phase E-G 待做（__init__.py + server/ + 删冗余 + 测试）
-- WIP 详情见 `docs/meta/HANDOFF-2026-08-10-23-no-paper-library-simplify.md`
+- last commit: `79fb7cb` refactor: Phase E+F - Settings 重构 + 删除论文库场景遗留
+- **✅ Phase A-G 全部完成**
+- **项目可运行**：`python -c "from evoscholar import __version__"` ✅
+- **服务器可启动**：`uvicorn evoscholar.server.app:app` + `curl /health` + `curl /api/settings` ✅
+- 所有论文库场景（Docs/DocDetails/PQASession/Text/crossref/unpaywall/journal_quality/retractions/AskText/agent_query）均已删除
+- 13 个 API 路由全部 wired（sessions/papers/graph/history/settings/usage + SSE events）
+- 详细信息见各 Phase commit + `docs/meta/HANDOFF-2026-08-10-23-no-paper-library-simplify.md`
+
+## Pending (next session 可能做的工作)
+
+1. 删除 `tests/` （已被先前的 7dcfaa7 删除，无需做）
+2. **回归测试** —— 之前 WIP 状态下 tests 已被删；下一步可以选恢复并适配
+3. **删除 `pyproject.toml` 中已不用的依赖**（lmi 用 `fhlmi>=0.45.0` 等；qdrant-client / pybtex 等论文库相关可能要剔除）
+4. **二次 PR 给 upstream** —— 论文库场景改造在 0gaowei/paper-agent 单边持有，可考虑贡献到 Future-House/paper-qa（如对方也想要）
 
 ## Pending
 
-- Phase C-G 依次推进（见 HANDOFF 文档）
-- 每 Phase 完成后单独 commit + 单独测试
+- ~~Phase C-G 依次推进（见 HANDOFF 文档）~~
+- ~~每 Phase 完成后单独 commit + 单独测试~~
+- Phase C-G 已全部完成（见 Current State）
