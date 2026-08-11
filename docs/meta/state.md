@@ -18,11 +18,15 @@
 | 2026-08-11 | Phase E 完成：新建 configs.settings.Settings 替代 lit_qa.settings | 只承载 in-tree 实际使用的字段（llm/llm_config/embedding/research），不做完整功能恢复 |
 | 2026-08-11 | Phase F 删除 _ldp_shims.py + iterative_search/core.py | 两个模块均无 in-tree 调用方（LDP agent 框架未用，_TrackedLLMAdapter 已搬到 synthesis/builder.py） |
 | 2026-08-11 | **项目恢复运行**：`from evoscholar import ...` + `uvicorn evoscholar.server.app:app` + `curl /health` + `curl /api/settings` 全部 PASS | Phase A-G 全部完成；论文库场景彻底删除，搜索+极简总结路径完整 |
+| 2026-08-11 | 清理论文库场景残留：删除 zotero/openreview contrib 与 docs/tutorials/* | 跟上一次重构同步：删除 contrib/zotero.py, contrib/openreview_paper_helper.py, configs/openreview.json；pyproject.toml 移除 zotero/openreview extras；env.sh 改用 uv |
+| 2026-08-11 | 删除 Semantic Scholar 搜索源，默认 providers 改为 `["openalex"]` | 用户反馈申请 S2 API key 麻烦；OpenAlex 已覆盖全文搜索/元数据/引用/abstract 反向索引等核心能力，无需 key。建议设置 `OPENALEX_MAILTO` 提升优先级 |
+| 2026-08-11 | 删除 S2 后同步移除相关 API 字段（事件/设置/学术论文模型） | 避免前后端 schema 残留死字段：`DocsJsonSchema.s2_id` / `SettingsPayload.s2_configured` / `AcademicPaper.s2_id` / `PaperSource.SEMANTIC_SCHOLAR` / 前端 `s2Id` 类型 + `s2_id/s2_configured` camelCase 映射全部删除 |
+| 2026-08-11 | 前端 dataSources 简化为仅 OpenAlex | 与后端搜索 provider 单一化同步：删除 arXiv/Semantic Scholar/PubMed/IEEE Xplore 占位条目，settings 页面只显示 OpenAlex |
 
 ## Current State (WIP)
 
 - branch: `refactor/simplify-no-paper-library`
-- last commit: `79fb7cb` refactor: Phase E+F - Settings 重构 + 删除论文库场景遗留
+- last commit: `381aaba` 删除 Semantic Scholar：默认搜索源仅 OpenAlex
 - **✅ Phase A-G 全部完成**
 - **项目可运行**：`python -c "from evoscholar import __version__"` ✅
 - **服务器可启动**：`uvicorn evoscholar.server.app:app` + `curl /health` + `curl /api/settings` ✅
