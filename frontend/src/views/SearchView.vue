@@ -115,7 +115,7 @@
               <el-icon><ArrowRight /></el-icon>
             </el-button>
           </div>
-          <PaperList :papers="searchStore.session?.papers.slice(0, 6) || []" />
+          <PaperList :papers="searchStore.session?.papers || []" />
         </div>
       </div>
     </transition>

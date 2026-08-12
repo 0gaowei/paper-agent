@@ -164,6 +164,8 @@ const viewGraph = () => {
 }
 
 onMounted(async () => {
+  // Reset paper filter state so all papers from a new session are visible
+  papersStore.resetFilters()
   if (!searchStore.session) {
       const sessionId = route.params.sessionId as string
       if (sessionId) {

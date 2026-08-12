@@ -64,18 +64,30 @@ export const useSearchStore = defineStore('search', () => {
           session.value!.papers.push(paper)
           usePapersStore().addPapers([paper])
         }
-        setStep('3', 'running', data)
+        setStep('3', 'running', { count: session.value!.papers.length })
         break
       }
-      case 'usage':
-        session.value!.usage = data as UsageStats
-        session.value!.stats = { ...session.value!.stats, ...(data as UsageStats) }
+      case 'usage': {
+        const u = data as UsageStats & { totalTokens?: number; totalCost?: number; llmCalls?: number; searchCalls?: number; total_tokens?: number; total_cost?: number; llm_calls?: number; search_calls?: number }
+        session.value!.usage = u as UsageStats
+        const totalTokens = u.totalTokens ?? (u as { total_tokens?: number }).total_tokens ?? 0
+        const totalCost = u.totalCost ?? (u as { total_cost?: number }).total_cost ?? 0
+        const llmCalls = u.llmCalls ?? (u as { llm_calls?: number }).llm_calls ?? 0
+        const searchCalls = u.searchCalls ?? (u as { search_calls?: number }).search_calls ?? 0
+        session.value!.stats = {
+          ...session.value!.stats,
+          apiCalls: llmCalls + searchCalls,
+          cost: totalCost,
+          tokenUsage: totalTokens,
+          totalTokens,
+        }
         break
+      }
       case 'partial_documents':
-        setStep('3', 'running', data)
+        setStep('3', 'running', { count: session.value!.papers.length })
         break
       case 'citation_expanded':
-        setStep('3', 'running', data)
+        setStep('3', 'running', { count: session.value!.papers.length })
         break
       case 'cancelled':
         session.value!.status = 'cancelled'
@@ -90,17 +102,54 @@ export const useSearchStore = defineStore('search', () => {
           ?? '')
         setStep('4', 'completed', data)
         break
-      case 'done':
+      case 'done': {
         if (session.value!.status !== 'error') {
           session.value!.status = 'completed'
         }
         session.value!.completedAt = new Date().toISOString()
-        setStep('3', 'completed')
+        const doneData = data as {
+          papersCount?: number; papers_count?: number; rounds?: number;
+          relevant_papers?: number; relevantPapers?: number;
+          total_tokens?: number; totalTokens?: number;
+          prompt_tokens?: number; promptTokens?: number;
+          completion_tokens?: number; completionTokens?: number;
+          total_cost?: number; totalCost?: number;
+          llm_calls?: number; llmCalls?: number;
+          search_calls?: number; searchCalls?: number;
+        }
+        const totalPapers = doneData.papersCount ?? doneData.papers_count ?? session.value!.papers.length
+        const relevantPapers = doneData.relevant_papers ?? doneData.relevantPapers
+          ?? session.value!.papers.filter(p => p.relevanceTier === 'high' || p.relevanceTier === 'partial').length
+        const totalTokens = doneData.total_tokens ?? doneData.totalTokens ?? 0
+        const totalCost = doneData.total_cost ?? doneData.totalCost ?? 0
+        const llmCalls = doneData.llm_calls ?? doneData.llmCalls ?? 0
+        const searchCalls = doneData.search_calls ?? doneData.searchCalls ?? 0
+        session.value!.stats = {
+          ...session.value!.stats,
+          totalPapers,
+          relevantPapers,
+          apiCalls: llmCalls + searchCalls,
+          cost: totalCost,
+          tokenUsage: totalTokens,
+        }
+        setStep('3', 'completed', { count: totalPapers })
         setStep('4', 'completed', data)
         isSearching.value = false
         cancelSearchSubscription(eventSource)
         eventSource = null
+        // SSE done event may arrive before buffered flush completes.
+        // Refetch the session via HTTP to guarantee the latest stats.
+        getSession(session.value!.id).then(restored => {
+          session.value!.stats = {
+            totalPapers: session.value!.papers.length,
+            relevantPapers: session.value!.papers.filter(p => p.relevanceTier === 'high' || p.relevanceTier === 'partial').length,
+            apiCalls: (restored.usage?.llmCalls ?? 0) + (restored.usage?.searchCalls ?? 0),
+            cost: restored.usage?.totalCost ?? 0,
+            tokenUsage: restored.usage?.totalTokens ?? 0,
+          }
+        }).catch(() => undefined)
         break
+      }
       case 'error':
         const errorMsg = String((data as { error?: string }).error ?? (data as { message?: string }).message ?? event.error ?? '搜索失败')
         session.value!.status = 'error'
