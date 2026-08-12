@@ -27,14 +27,19 @@ class SSEProgressCallback:
         self.publisher = publisher
         self.session_id = session_id
 
-    async def on_evidence_extraction_start(self, session_id: str | None) -> None:
+    async def on_evidence_extraction_start(
+        self, session_id: str | None, total: int = 0
+    ) -> None:
         from evoscholar.server.events import EventType, SSEEvent
 
         await self.publisher.publish(
             self.session_id,
             SSEEvent(
                 event=EventType.EVIDENCE_EXTRACTION_START,
-                data={"message": "Starting evidence extraction from papers..."},
+                data={
+                    "message": "Starting evidence extraction from papers...",
+                    "total": total,
+                },
             ),
         )
 

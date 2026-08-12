@@ -14,6 +14,7 @@ from tenacity import (
     before_sleep_log,
     retry_if_exception,
     stop_after_attempt,
+    wait_exponential_jitter,
 )
 
 from evoscholar.lightning.types import PaperDetail
@@ -355,11 +356,19 @@ async def _openalex_get(
             lambda exc: isinstance(exc, (httpx.ReadTimeout, httpx.ConnectTimeout))
             or (
                 isinstance(exc, httpx.HTTPStatusError)
-                and exc.response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR
+                and exc.response.status_code
+                in (
+                    httpx.codes.TOO_MANY_REQUESTS,
+                    httpx.codes.INTERNAL_SERVER_ERROR,
+                    httpx.codes.BAD_GATEWAY,
+                    httpx.codes.SERVICE_UNAVAILABLE,
+                    httpx.codes.GATEWAY_TIMEOUT,
+                )
             )
         ),
         before_sleep=before_sleep_log(logger, logging.WARNING),
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential_jitter(initial=1, max=30),
     ):
         with attempt:
             response = await session.get(

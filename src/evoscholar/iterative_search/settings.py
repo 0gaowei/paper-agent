@@ -81,7 +81,7 @@ class ResearchSettings(BaseModel):
         }
     )
     per_field_quota: dict[str, int] = Field(default_factory=dict)
-    concurrency: int = Field(default=4, ge=1)
+    concurrency: int = Field(default=2, ge=1)
     llm_budget_usd: float = Field(default=5.0, ge=0.0)
     token_budget: int = Field(default=200_000, ge=0)
     api_budget: int = Field(default=1000, ge=0)

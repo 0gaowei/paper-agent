@@ -27,8 +27,10 @@ class ResearchProgressCallback(Protocol):
     This decouples the domain layer (engine) from the transport layer (SSE).
     """
 
-    async def on_evidence_extraction_start(self, session_id: str | None) -> None:
-        """Called when evidence extraction begins."""
+    async def on_evidence_extraction_start(
+        self, session_id: str | None, total: int = 0
+    ) -> None:
+        """Called when evidence extraction begins; ``total`` papers to process."""
         ...
 
     async def on_evidence_extraction_done(
@@ -74,7 +76,9 @@ class NoOpProgressCallback:
     Use this when progress events are not needed (e.g., in tests).
     """
 
-    async def on_evidence_extraction_start(self, session_id: str | None) -> None:
+    async def on_evidence_extraction_start(
+        self, session_id: str | None, total: int = 0
+    ) -> None:
         pass
 
     async def on_evidence_extraction_done(
