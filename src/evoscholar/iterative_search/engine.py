@@ -15,6 +15,8 @@ from evoscholar.lightning.answer_builder import _format_citation
 from evoscholar.query_understanding import analyze_and_expand_query
 from evoscholar.paper_ranker.relevance import RelevanceTier
 from evoscholar.paper_ranker import ascore_papers, rank_with_mmr, score_papers
+from evoscholar.synthesis.builder import build_evidence_and_answer
+from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet
 
 from .callbacks import NoOpProgressCallback, ResearchProgressCallback
 from .models import (
@@ -28,8 +30,6 @@ from .models import (
 )
 
 if TYPE_CHECKING:
-    from evoscholar.synthesis.builder import build_evidence_and_answer
-    from evoscholar.synthesis.models import AnswerSummary, EvidenceSnippet
     from ..metadata_clients.academic_search import AcademicSearchProvider
 
 logger = logging.getLogger(__name__)
@@ -460,6 +460,7 @@ class ResearchEngine:
             embedding_model=self.embedding_model,
             session_id=session_id,
             progress_callback=progress_callback,
+            usage=session.usage,
         )
         session.evidence = evidence
         session.answer = answer

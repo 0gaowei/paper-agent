@@ -425,6 +425,13 @@ class ResearchEventBridge:
                 )
             )
 
+        # Count papers by relevance tier (same formula as in ResearchSession.papers)
+        papers = (self.rs.all_papers or {}).values()
+        relevant_count = sum(
+            1 for p in papers
+            if getattr(p, "relevance_tier", None) in ("high", "partial")
+        )
+        server_usage = _to_server_usage(self.rs.usage)
         events.append(
             self._emit(
                 EventType.DONE,
@@ -434,6 +441,13 @@ class ResearchEventBridge:
                     else None,
                     "rounds": int(getattr(self.rs.usage, "search_rounds", 0)),
                     "papers_count": len(self.rs.all_papers or {}),
+                    "relevant_papers": relevant_count,
+                    "total_tokens": server_usage.total_tokens,
+                    "prompt_tokens": server_usage.prompt_tokens,
+                    "completion_tokens": server_usage.completion_tokens,
+                    "total_cost": server_usage.total_cost,
+                    "llm_calls": server_usage.llm_calls,
+                    "search_calls": server_usage.search_calls,
                 },
             )
         )

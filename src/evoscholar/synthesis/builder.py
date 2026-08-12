@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from lmi import LLMResult
+
 from ..lightning.answer_builder import (
     ProgressFn,
     select_relevant_snippets,
@@ -20,6 +22,34 @@ from .models import AnswerSummary, EvidenceSnippet, UsageStats
 if TYPE_CHECKING:
     from ..iterative_search.models import AcademicPaper
     from ..iterative_search.callbacks import ResearchProgressCallback
+
+
+def _normalize_messages(messages: Any) -> Any:
+    """Convert raw dict messages into ``aviary.Message`` instances.
+
+    LMI's ``acompletion`` path calls ``m.model_dump(by_alias=True)`` on each
+    message, so plain ``{"role": ..., "content": ...}`` dicts raise
+    ``AttributeError: 'dict' object has no attribute 'model_dump'``. Mirrors
+    the conversion done in ``query_understanding.analyze._call_llm``.
+    """
+    from aviary.core import Message
+
+    if not isinstance(messages, (list, tuple)):
+        return messages
+    normalized: list[Any] = []
+    needs_wrap = False
+    for message in messages:
+        if isinstance(message, dict):
+            needs_wrap = True
+            normalized.append(
+                Message(
+                    role=message.get("role", "user"),
+                    content=message.get("content", ""),
+                )
+            )
+        else:
+            normalized.append(message)
+    return normalized if needs_wrap else messages
 
 
 def _tracked_llm(
@@ -44,13 +74,15 @@ def _tracked_llm(
 
             from lmi import LLMResult
 
+            normalized = _normalize_messages(messages)
+
             if hasattr(self.delegate, "acomplete"):
-                response = self.delegate.acomplete(messages, **kwargs)
+                response = self.delegate.acomplete(normalized, **kwargs)
                 response = (
                     await response if inspect.isawaitable(response) else response
                 )
             elif hasattr(self.delegate, "call_single"):
-                response = self.delegate.call_single(messages=messages, **kwargs)
+                response = self.delegate.call_single(messages=normalized, **kwargs)
                 response = (
                     await response if inspect.isawaitable(response) else response
                 )
@@ -77,7 +109,33 @@ def _tracked_llm(
                     )
                 hidden = response.get("_hidden_params") or {}
                 self.usage.llm_cost_usd += float(hidden.get("response_cost") or 0.0)
-            return response.text if isinstance(response, LLMResult) else str(response)
+            return self._extract_text(response)
+
+        def _extract_text(self, response: Any) -> str:
+            if isinstance(response, str):
+                return response
+            if isinstance(response, LLMResult):
+                return response.text or ""
+            if isinstance(response, dict):
+                content = response.get("content")
+                if isinstance(content, str):
+                    return content
+                choices = response.get("choices") or []
+                if choices:
+                    message = choices[0].get("message") or {}
+                    if isinstance(message, dict):
+                        c = message.get("content")
+                        if isinstance(c, str):
+                            return c
+            text = getattr(response, "text", None)
+            if isinstance(text, str):
+                return text
+            choices = getattr(response, "choices", None) or []
+            if choices:
+                c = getattr(getattr(choices[0], "message", None), "content", None)
+                if isinstance(c, str):
+                    return c
+            return str(response)
 
     return _Adapter()
 
@@ -107,6 +165,7 @@ async def build_evidence_and_answer(
     embedding_model: Any | None,
     session_id: str | None = None,
     progress_callback: "ResearchProgressCallback | None" = None,
+    usage: UsageStats | None = None,
 ) -> tuple[list[EvidenceSnippet], AnswerSummary | None]:
     """Build evidence snippets and synthesize answer from papers.
 
@@ -118,6 +177,9 @@ async def build_evidence_and_answer(
         embedding_model: Embedding model (ignored — kept for ABI compatibility).
         session_id: Optional session ID for progress callbacks.
         progress_callback: Optional progress callback.
+        usage: Optional UsageStats instance. When provided (e.g. session.usage),
+            token counts and costs from evidence extraction and answer synthesis
+            are accumulated into it so they are preserved after the call returns.
 
     Returns:
         Tuple of (evidence snippets, answer summary).
@@ -131,8 +193,8 @@ async def build_evidence_and_answer(
     if not evidence_papers:
         return [], None
 
-    usage = UsageStats()
-    tracked_llm = _tracked_llm(llm_model, usage)
+    _usage = usage if usage is not None else UsageStats()
+    tracked_llm = _tracked_llm(llm_model, _usage)
     progress_fn = _to_progress_callback(progress_callback, session_id)
 
     evidence = await select_relevant_snippets(
