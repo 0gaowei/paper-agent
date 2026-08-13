@@ -75,33 +75,33 @@
             <StatCard
               :icon="Document"
               label="论文总数"
-              :value="searchStore.session.stats.totalPapers ?? 0"
+              :value="displayStats.totalPapers ?? 0"
             />
             <StatCard
               :icon="Select"
               label="相关论文"
-              :value="searchStore.session.stats.relevantPapers ?? 0"
+              :value="displayStats.relevantPapers ?? 0"
             />
             <StatCard
               :icon="Connection"
               label="API 调用"
-              :value="searchStore.session.stats.apiCalls ?? 0"
+              :value="displayStats.apiCalls ?? 0"
             />
             <StatCard
               :icon="Coin"
               label="Token 使用"
-              :value="searchStore.session.stats.tokenUsage ?? 0"
+              :value="displayStats.tokenUsage ?? 0"
             />
             <StatCard
               :icon="Money"
               label="成本"
-              :value="searchStore.session.stats.cost ?? 0"
+              :value="displayStats.cost ?? 0"
               format="currency"
             />
             <StatCard
               :icon="Timer"
               label="耗时"
-              :value="searchStore.session.stats.duration ?? 0"
+              :value="displayStats.duration ?? 0"
               format="duration"
             />
           </div>
@@ -123,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Cpu, Share, DataLine, Connection, Document, Select, Coin, Money, Timer, ArrowRight } from '@element-plus/icons-vue'
 import { useSearchStore } from '@/stores/search'
@@ -139,6 +139,28 @@ const route = useRoute()
 const searchStore = useSearchStore()
 
 const searchInputRef = ref<InstanceType<typeof SearchInput> | null>(null)
+
+// 工作区统计 fallback: 当后端 SSE done 事件数据残缺(旧版) 或 stats 缺失
+// totalPapers 时,基于本地 session.papers 自动推断。这是保护性 UX 改进,确保
+// "明明有结果"的情况下统计面板不为全 0。
+const inferStats = (raw: typeof searchStore.session.stats | undefined) => {
+  if (!searchStore.session) return raw
+  const papers = searchStore.session.papers || []
+  const inferredTotal = papers.length
+  const inferredRelevant = papers.filter(
+    (p) => p.relevanceTier === 'high' || p.relevanceTier === 'partial'
+  ).length
+  return {
+    totalPapers: raw?.totalPapers && raw.totalPapers > 0 ? raw.totalPapers : inferredTotal,
+    relevantPapers: raw?.relevantPapers && raw.relevantPapers > 0 ? raw.relevantPapers : inferredRelevant,
+    totalTokens: raw?.totalTokens ?? 0,
+    apiCalls: raw?.apiCalls ?? 0,
+    tokenUsage: raw?.tokenUsage ?? 0,
+    cost: raw?.cost ?? 0,
+    duration: raw?.duration ?? 0,
+  }
+}
+const displayStats = computed(() => inferStats(searchStore.session?.stats))
 
 const handleSearch = (searchQuery: string, options: SearchConfig) => {
   const operation = searchStore.startSearch(searchQuery, options)

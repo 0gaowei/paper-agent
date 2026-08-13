@@ -86,22 +86,22 @@
           <StatCard
             :icon="Document"
             label="论文总数"
-            :value="searchStore.session.stats.totalPapers ?? 0"
+            :value="displayStats.totalPapers ?? 0"
           />
           <StatCard
             :icon="Select"
             label="相关论文"
-            :value="searchStore.session.stats.relevantPapers ?? 0"
+            :value="displayStats.relevantPapers ?? 0"
           />
           <StatCard
             :icon="Connection"
             label="API 调用"
-            :value="searchStore.session.stats.apiCalls ?? 0"
+            :value="displayStats.apiCalls ?? 0"
           />
           <StatCard
             :icon="Coin"
             label="成本"
-            :value="searchStore.session.stats.cost ?? 0"
+            :value="displayStats.cost ?? 0"
             format="currency"
           />
         </div>
@@ -115,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Connection, Grid, List, RefreshLeft, Document, Select, Coin } from '@element-plus/icons-vue'
 import { useSearchStore } from '@/stores/search'
@@ -128,6 +128,24 @@ const router = useRouter()
 const route = useRoute()
 const searchStore = useSearchStore()
 const papersStore = usePapersStore()
+
+// Fallback stats: 当后端 SSE done 数据残缺或 store.stats 缺失字段时,基于
+// 本地 papers 自动推断论文数 / 相关论文数。这是保护性 UX 改进。
+const inferStats = (raw: typeof searchStore.session.stats | undefined) => {
+  if (!searchStore.session) return raw
+  const papers = searchStore.session.papers || []
+  const inferredTotal = papers.length
+  const inferredRelevant = papers.filter(
+    (p) => p.relevanceTier === 'high' || p.relevanceTier === 'partial'
+  ).length
+  return {
+    totalPapers: raw?.totalPapers && raw.totalPapers > 0 ? raw.totalPapers : inferredTotal,
+    relevantPapers: raw?.relevantPapers && raw.relevantPapers > 0 ? raw.relevantPapers : inferredRelevant,
+    apiCalls: raw?.apiCalls ?? 0,
+    cost: raw?.cost ?? 0,
+  }
+}
+const displayStats = computed(() => inferStats(searchStore.session?.stats))
 
 const sortBy = ref('relevance')
 const yearRange = ref<[number, number]>([2000, 2026])
