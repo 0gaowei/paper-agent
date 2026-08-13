@@ -33,6 +33,7 @@ const SNAKE_TO_CAMEL_KEYS = new Set<string>([
   'papers_count', 'paper_count', 'answer_length', 'answer_summary', 'subqueries',
   'relevance_score', 'round_started', 'paper_found', 'events_emitted',
   'original_query', 'suitable_sources', 'error_message',
+  'relevant_papers',
 ])
 
 function toCamelKey(key: string): string {

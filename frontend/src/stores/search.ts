@@ -137,17 +137,6 @@ export const useSearchStore = defineStore('search', () => {
         isSearching.value = false
         cancelSearchSubscription(eventSource)
         eventSource = null
-        // SSE done event may arrive before buffered flush completes.
-        // Refetch the session via HTTP to guarantee the latest stats.
-        getSession(session.value!.id).then(restored => {
-          session.value!.stats = {
-            totalPapers: session.value!.papers.length,
-            relevantPapers: session.value!.papers.filter(p => p.relevanceTier === 'high' || p.relevanceTier === 'partial').length,
-            apiCalls: (restored.usage?.llmCalls ?? 0) + (restored.usage?.searchCalls ?? 0),
-            cost: restored.usage?.totalCost ?? 0,
-            tokenUsage: restored.usage?.totalTokens ?? 0,
-          }
-        }).catch(() => undefined)
         break
       }
       case 'error':
